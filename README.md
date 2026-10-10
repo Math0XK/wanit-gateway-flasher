@@ -9,7 +9,7 @@ Utilitaire Windows pour flasher par câble USB le firmware du **Wanit Gateway** 
 
 **[⬇ Télécharger WanitGatewayFlasher.exe](https://github.com/Math0XK/wanit-gateway-flasher/releases/latest/download/WanitGatewayFlasher.exe)** (Windows 10 et 11, 64 bits)
 
-Ce lien pointe toujours vers la dernière version. Page de présentation : <https://math0xk.github.io/wanit-gateway-flasher/>
+Ce lien pointe toujours vers la dernière version.
 
 ## Utilisation
 
