@@ -3,18 +3,18 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-green)
 
-Utilitaire Windows pour flasher par câble USB le firmware du **Wanit Gateway** (ESP32-C6), à partir des binaires publiés sur [wanit-gateway-releases](https://github.com/Math0XK/wanit-gateway-releases/releases). Il s'adresse aux intégrateurs et au dépannage : aucune installation, aucune ligne de commande.
+Utilitaire Windows pour flasher le firmware du **Wanit Gateway** (ESP32-C6) avec le module de flash USB vers Segger fourni par Wanit, à partir des binaires publiés sur [wanit-gateway-releases](https://github.com/Math0XK/wanit-gateway-releases/releases). Il s'adresse aux intégrateurs et au dépannage : aucune installation, aucune ligne de commande.
 
 ## Télécharger
 
 **[⬇ Télécharger WanitGatewayFlasher.exe](https://github.com/Math0XK/wanit-gateway-flasher/releases/latest/download/WanitGatewayFlasher.exe)** (Windows 10 et 11, 64 bits)
 
-Ce lien pointe toujours vers la dernière version.
+Ce lien pointe toujours vers la dernière version. Guide d'installation imprimable : [Guide-Wanit-Gateway-Flasher.pdf](docs/Guide-Wanit-Gateway-Flasher.pdf).
 
 ## Utilisation
 
 1. Lancez `WanitGatewayFlasher.exe`. Il n'y a rien à installer.
-2. Branchez la carte en USB. Le port est détecté et sélectionné automatiquement.
+2. Branchez le module de flash sur le connecteur Segger du Wanit Gateway, puis sur un port USB du PC. Il est détecté et sélectionné automatiquement ; il passe seul la carte en mode flash, sans bouton à manipuler.
 3. La dernière version du firmware est proposée par défaut. Vous pouvez choisir une version plus ancienne, ou un fichier `.bin` local.
 4. Cliquez sur **Flasher**.
 
@@ -35,7 +35,7 @@ Ces avertissements n'apparaissent qu'une fois : ensuite, l'utilitaire se met à 
 |---|---|
 | Variante debug | Flashe `-full-debug.bin` (logs verbeux). Expose des informations sensibles sur l'UART : pas pour la production. |
 | Effacer toute la flash | Efface toute la mémoire avant d'écrire : Wi-Fi, UID, nom et token sont perdus. |
-| Vitesse de transfert | 921600 bauds par défaut. Baissez-la si le flash échoue avec un câble long ou un adaptateur bas de gamme. |
+| Vitesse de transfert | 921600 bauds par défaut. Baissez-la si le flash échoue en cours d'écriture (rallonge USB, hub). |
 
 ### Sécurités intégrées
 
@@ -55,7 +55,7 @@ Au démarrage, l'utilitaire vérifie s'il existe une version plus récente. Une 
 
 ### En cas d'échec
 
-Le message d'erreur indique quoi faire. Le cas le plus courant : l'ESP32 ne passe pas en mode téléchargement. Maintenez **BOOT** enfoncé, appuyez sur **RESET**, relâchez **BOOT** et relancez. Le journal détaillé (bouton **Journal**, puis **Copier**) est utile pour le support.
+Le message d'erreur indique quoi faire. Le cas le plus courant : le connecteur du module est mal enfoncé ou à l'envers sur le connecteur Segger de la carte. Rebranchez-le et relancez. Si aucun port n'apparaît au premier branchement, laissez à Windows le temps d'installer le pilote FTDI, ou installez le pilote « VCP » depuis ftdichip.com. Le journal détaillé (bouton **Journal**, puis **Copier**) est utile pour le support.
 
 ## Développement
 
@@ -78,6 +78,7 @@ python -m wanit_flasher
 | `wanit_flasher/theme.py` | Couleurs de la charte Wanit |
 | `tools/make_assets.py` | Génère icône et logos depuis `assets/brand/wanit-logo.jpg` |
 | `tools/build.py` | Construit `dist/WanitGatewayFlasher.exe` |
+| `tools/build_guide.py` | Génère le guide PDF depuis `docs/guide/guide.html` |
 
 ### Construire l'exécutable
 
@@ -100,6 +101,16 @@ git push origin v1.0.1
 ```
 
 Le workflow GitHub Actions construit l'exe et publie la release. Les utilisateurs se voient proposer la mise à jour à leur prochain lancement, et le lien de téléchargement pointe automatiquement vers la nouvelle version.
+
+Si le build ne s'est pas lancé, ou pour reconstruire une release existante : onglet *Actions* → *Release* → *Run workflow*, en indiquant le tag (par exemple `v1.0.1`). Le tag doit déjà exister sur GitHub et correspondre à `__version__`.
+
+### Guide PDF
+
+Le guide `docs/Guide-Wanit-Gateway-Flasher.pdf` est généré à partir de `docs/guide/guide.html` (Windows, Microsoft Edge requis) :
+
+```bash
+python tools/build_guide.py
+```
 
 ### Page de téléchargement
 

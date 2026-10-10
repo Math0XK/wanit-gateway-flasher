@@ -337,11 +337,12 @@ class App(ctk.CTk):
     def _on_port_selected(self) -> None:
         port = self.selected_port()
         if port is None:
-            self.port_status.configure(text="Branchez la carte en USB. La liste se met à jour toute seule.", text_color=t.TEXT_HINT)
+            self.port_status.configure(text="Branchez le module de flash sur la carte et sur un port USB.", text_color=t.TEXT_HINT)
         elif port.kind == "espressif":
             self.port_status.configure(text="● Appareil Espressif détecté", text_color=t.SUCCESS)
         elif port.kind == "bridge":
-            self.port_status.configure(text="● Adaptateur USB-série détecté", text_color=t.SUCCESS)
+            text = "● Module de flash détecté" if port.description.startswith("Module") else "● Adaptateur USB-série détecté"
+            self.port_status.configure(text=text, text_color=t.SUCCESS)
         else:
             self.port_status.configure(text="Port série non identifié : vérifiez qu'il s'agit bien de la carte.", text_color=t.TEXT_HINT)
         self._refresh_action()

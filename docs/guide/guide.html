@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Wanit Gateway Flasher – Guide d'installation et d'utilisation</title>
+<!-- Source du PDF : python tools/build_guide.py -->
+<style>
+  :root {
+    --blue: #209BD7; --blue-tint: #E8F5FC; --blue-text: #16729F;
+    --navy: #263850; --muted: #6B7C93; --hint: #8A99AD; --bg: #F4F7FA;
+    --border: #D3DBE4; --warn: #8A5A0B; --warn-tint: #FFF6E5; --warn-border: #F1D9A8;
+    --ok: #1F9D6A; --danger: #C0392B;
+  }
+  @page { size: A4; margin: 18mm 17mm 18mm 17mm;
+    @bottom-left { content: "Wanit Gateway Flasher · Guide d'installation"; font: 8pt "Segoe UI", sans-serif; color: #8A99AD; }
+    @bottom-right { content: counter(page) " / " counter(pages); font: 8pt "Segoe UI", sans-serif; color: #8A99AD; }
+  }
+  @page :first { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; color: var(--navy); font: 8.75pt/1.5 "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--blue-text); text-decoration: none; }
+  code { font: 8pt Consolas, monospace; background: var(--bg); border: 0.5pt solid var(--border); border-radius: 3px; padding: 0 3px; }
+  kbd { font: inherit; font-weight: 600; background: #fff; border: 0.75pt solid var(--border); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
+
+  /* Couverture */
+  .cover { height: 296mm; overflow: hidden; display: flex; flex-direction: column; break-after: page; }
+  .cover-top { background: var(--navy); color: #fff; padding: 14mm 20mm 10mm; }
+  .brand { display: flex; align-items: center; gap: 5mm; margin-bottom: 14mm; }
+  .brand .mark { height: 15mm; }
+  .brand .word { height: 6mm; display: block; margin-bottom: 1.5mm; }
+  .brand small { color: #A9B8CC; font-size: 10pt; }
+  .cover h1 { font-size: 26pt; line-height: 1.15; font-weight: 600; margin: 0 0 4mm; }
+  .cover .sub { font-size: 11.5pt; color: #C9D4E2; margin: 0; max-width: 140mm; }
+  .cover-body { flex: 1; padding: 8mm 20mm 6mm; display: flex; flex-direction: column; gap: 4.5mm; }
+  .cover .meta { margin: 4mm 0 0; color: #A9B8CC; font-size: 8.5pt; }
+
+  h2 { font-size: 14pt; font-weight: 600; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1.5pt solid var(--blue); break-after: avoid; }
+  h3 { font-size: 10.5pt; font-weight: 600; margin: 6mm 0 2mm; break-after: avoid; }
+  p { margin: 0 0 3mm; }
+  section { break-before: page; }
+  .avoid { break-inside: avoid; }
+
+  .card { border: 0.75pt solid var(--border); border-radius: 3mm; padding: 5mm 6mm; background: #fff; }
+  .card.tint { background: var(--bg); border-color: transparent; }
+  .card.warn { background: var(--warn-tint); border-color: var(--warn-border); }
+  .card.warn .title { color: var(--warn); }
+  .card.info { background: var(--blue-tint); border-color: transparent; }
+  .card .title { font-weight: 600; font-size: 10pt; margin-bottom: 2mm; }
+
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: 3mm; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 7mm 1fr; gap: 3mm; align-items: start; }
+  ol.steps > li::before { content: counter(s); width: 7mm; height: 7mm; border-radius: 50%; background: var(--blue); color: #fff;
+    font-weight: 600; font-size: 9.5pt; display: flex; align-items: center; justify-content: center; }
+  ol.steps.light > li::before { background: var(--blue-tint); color: var(--blue-text); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  .download { display: grid; grid-template-columns: 1fr 34mm; gap: 6mm; align-items: center; }
+  .download img { width: 34mm; height: 34mm; }
+  .link { font: 8.5pt Consolas, monospace; word-break: break-all; color: var(--blue-text); }
+  .button { display: inline-block; background: var(--blue); color: #fff; font-weight: 600; border-radius: 2mm; padding: 2mm 5mm; margin: 1mm 0 3mm; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th, td { text-align: left; vertical-align: top; padding: 2mm 3mm; border-bottom: 0.5pt solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 7.5pt; text-transform: uppercase; letter-spacing: .03em; }
+  tr { break-inside: avoid; }
+  td:first-child { font-weight: 600; width: 34%; }
+
+  .shot { border: 0.75pt solid var(--border); border-radius: 2mm; overflow: hidden; display: block; }
+  .shot img { width: 100%; display: block; }
+  figure { margin: 0; break-inside: avoid; }
+  figcaption { font-size: 8.5pt; color: var(--muted); margin-top: 1.5mm; }
+  .figrow { display: grid; grid-template-columns: 70mm 1fr; gap: 7mm; align-items: start; }
+
+  /* Illustrations des fenêtres Windows (schématiques) */
+  .mock { border-radius: 2mm; font-size: 8.5pt; break-inside: avoid; }
+  .mock.smartscreen { background: #0B5CAD; color: #fff; padding: 5mm 6mm; }
+  .mock.smartscreen .t { font-size: 13pt; font-weight: 300; margin-bottom: 2mm; }
+  .mock.smartscreen .l { text-decoration: underline; margin: 2mm 0; display: inline-block; }
+  .mock .btns { display: flex; justify-content: flex-end; gap: 2mm; margin-top: 3mm; }
+  .mock .b { border: 0.75pt solid #fff; padding: 1mm 4mm; }
+  .mock .b.hl { background: #fff; color: #0B5CAD; font-weight: 600; outline: 1.5pt solid #F5B700; outline-offset: 1pt; }
+  .mock.download-bar { background: #fff; border: 0.75pt solid var(--border); padding: 3mm 4mm; color: #333; }
+  .mock.download-bar .row { display: flex; justify-content: space-between; align-items: center; gap: 3mm; }
+  .mock.download-bar .menu { border: 0.75pt solid var(--border); border-radius: 1.5mm; margin-top: 2mm; padding: 1mm 0; width: 45mm; margin-left: auto; }
+  .mock.download-bar .menu div { padding: 1mm 3mm; }
+  .mock.download-bar .menu .hl { background: var(--blue-tint); font-weight: 600; outline: 1.5pt solid #F5B700; }
+  .mock-caption { font-size: 8pt; color: var(--hint); margin-top: 1mm; font-style: italic; }
+  .pill { display: inline-block; font-size: 8pt; font-weight: 600; border-radius: 1.5mm; padding: 0 2mm; }
+  .pill.ok { background: #E3F6EE; color: var(--ok); }
+  .pill.no { background: #FDECEA; color: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- ================= Couverture ================= -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="brand">
+      <img class="mark" src="img/mark.png" alt="">
+      <div><img class="word" src="img/wordmark_white.png" alt="Wanit"><small>Gateway Flasher</small></div>
+    </div>
+    <h1>Guide d'installation<br>et d'utilisation</h1>
+    <p class="sub">Flasher le firmware du Wanit Gateway (ESP32-C6) depuis un PC Windows, sans installation ni ligne de commande.</p>
+    <p class="meta">Utilitaire version 1.0.0 · Octobre 2026 · Logiciel libre sous licence GPL v3</p>
+  </div>
+
+  <div class="cover-body">
+    <div class="card info">
+      <div class="title">En bref</div>
+      <ol class="steps">
+        <li><div>Téléchargez <strong>WanitGatewayFlasher.exe</strong> (lien et QR code ci-dessous).</div></li>
+        <li><div>Lancez-le. Au premier lancement, Windows peut afficher un avertissement : voir page 2.</div></li>
+        <li><div>Branchez le module de flash fourni sur le connecteur Segger du Wanit Gateway, puis sur un port USB du PC : il est détecté automatiquement.</div></li>
+        <li><div>Cliquez sur <strong>Flasher</strong>. La dernière version du firmware est installée en moins d'une minute.</div></li>
+      </ol>
+    </div>
+
+    <div class="card download">
+      <div>
+        <div class="title">Téléchargement</div>
+        <p style="margin:0 0 2mm">Ce lien donne toujours la dernière version de l'utilitaire :</p>
+        <div class="link">https://github.com/Math0XK/wanit-gateway-flasher/releases/latest/download/WanitGatewayFlasher.exe</div>
+      </div>
+      <img src="img/qr.svg" alt="QR code du lien de téléchargement">
+    </div>
+
+    <div class="card tint">
+      <div class="title">Configuration requise</div>
+      <table>
+        <tr><td>Système</td><td>Windows 10 ou 11, 64 bits. Aucun droit administrateur nécessaire.</td></tr>
+        <tr><td>Module de flash</td><td>Le module tout-en-un <strong>USB vers connecteur Segger</strong> fourni par Wanit. Il passe seul la carte en mode flash : aucun bouton à manipuler.</td></tr>
+        <tr><td>Pilote</td><td>Installé automatiquement par Windows au premier branchement du module (pilote FTDI).</td></tr>
+        <tr><td>Connexion Internet</td><td>Recommandée pour récupérer les versions du firmware. Possible hors ligne avec un fichier local ou une version déjà téléchargée.</td></tr>
+        <tr><td>Appareil</td><td>Wanit Gateway (ESP32-C6). Tout autre modèle est détecté et refusé avant écriture.</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Installation ================= -->
+<section style="break-before: auto">
+  <h2>1. Télécharger et lancer l'utilitaire</h2>
+  <p>Il n'y a <strong>rien à installer</strong> : l'utilitaire est un seul fichier, <code>WanitGatewayFlasher.exe</code>, que l'on lance directement.</p>
+
+  <h3>Où ranger le fichier ?</h3>
+  <p>Placez-le dans un dossier personnel, par exemple <code>Documents\Wanit</code> ou sur le Bureau, puis créez éventuellement un raccourci (clic droit → <em>Afficher d'autres options</em> → <em>Envoyer vers</em> → <em>Bureau</em>). Évitez <code>C:\Program Files</code> : l'utilitaire ne pourrait pas s'y mettre à jour tout seul.</p>
+
+  <div class="card warn avoid" style="margin-top:5mm">
+    <div class="title">Windows affiche un avertissement ? C'est normal</div>
+    <p>L'utilitaire n'est pas signé avec un certificat de code payant. Windows et les navigateurs se méfient donc d'un programme qu'ils ne connaissent pas encore. Le fichier est publié directement par Wanit sur GitHub, et son empreinte SHA-256 est affichée sur la page de chaque version.</p>
+    <p style="margin:0">Ces avertissements n'apparaissent qu'une seule fois : ensuite, l'utilitaire se met à jour lui-même.</p>
+  </div>
+
+  <div class="grid2" style="margin-top:6mm">
+    <div class="avoid">
+      <h3 style="margin-top:0">Au téléchargement (Edge, Chrome)</h3>
+      <p>Si le navigateur indique que le fichier « n'est pas fréquemment téléchargé » :</p>
+      <ol class="steps light">
+        <li><div>Ouvrez le menu <kbd>…</kbd> à côté du téléchargement.</div></li>
+        <li><div>Choisissez <kbd>Conserver</kbd>.</div></li>
+        <li><div>Cliquez sur <kbd>Afficher plus</kbd>, puis <kbd>Conserver quand même</kbd>.</div></li>
+      </ol>
+      <div class="mock download-bar" style="margin-top:4mm">
+        <div class="row"><span><strong>WanitGatewayFlasher.exe</strong> n'est pas fréquemment téléchargé…</span><span>…</span></div>
+        <div class="menu"><div>Supprimer</div><div class="hl">Conserver</div><div>Signaler ce fichier</div></div>
+      </div>
+      <div class="mock-caption">Illustration simplifiée, l'affichage varie selon le navigateur.</div>
+    </div>
+
+    <div class="avoid">
+      <h3 style="margin-top:0">Au premier lancement</h3>
+      <p>Si Windows affiche « Windows a protégé votre ordinateur » :</p>
+      <ol class="steps light">
+        <li><div>Cliquez sur <kbd>Informations complémentaires</kbd>.</div></li>
+        <li><div>Vérifiez que l'application s'appelle bien <strong>WanitGatewayFlasher.exe</strong>.</div></li>
+        <li><div>Cliquez sur <kbd>Exécuter quand même</kbd>.</div></li>
+      </ol>
+      <div class="mock smartscreen" style="margin-top:4mm">
+        <div class="t">Windows a protégé votre ordinateur</div>
+        <div>Microsoft Defender SmartScreen a empêché le démarrage d'une application non reconnue…</div>
+        <div class="l">Informations complémentaires</div>
+        <div>Application : WanitGatewayFlasher.exe<br>Éditeur : Éditeur inconnu</div>
+        <div class="btns"><span class="b hl">Exécuter quand même</span><span class="b">Ne pas exécuter</span></div>
+      </div>
+      <div class="mock-caption">Illustration simplifiée, après le clic sur « Informations complémentaires ».</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Flasher ================= -->
+<section>
+  <h2>2. Flasher un Wanit Gateway</h2>
+  <div class="figrow">
+    <figure>
+      <div class="shot"><img src="img/main.png" alt="Fenêtre principale"></div>
+      <figcaption>Fenêtre principale, prête à flasher.</figcaption>
+    </figure>
+    <div>
+      <ol class="steps">
+        <li><div><strong>Branchez le module de flash.</strong> Enfichez son connecteur sur le connecteur Segger du Wanit Gateway, dans le bon sens, puis branchez le module sur un port USB du PC. Il apparaît tout seul dans <em>1 · Appareil</em> et la ligne verte confirme « Module de flash détecté ». La liste se met à jour quand on branche ou débranche le module ; le bouton <kbd>↻</kbd> force un rafraîchissement.</div></li>
+        <li><div><strong>Choisissez le firmware.</strong> Par défaut, la dernière version publiée est sélectionnée : dans la plupart des cas, il n'y a rien à changer. La liste permet de revenir à une version précédente ; <em>Notes de version</em> ouvre la description de la version.</div></li>
+        <li><div><strong>Cliquez sur le bouton bleu.</strong> Son libellé rappelle ce qui va se passer, par exemple « Flasher v2.1.0 sur COM5 ». Vérifiez-le avant de cliquer.</div></li>
+        <li><div><strong>Patientez</strong> sans débrancher le module : le firmware est téléchargé, vérifié, puis écrit. Comptez de 20 secondes à une minute.</div></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:8mm">
+    <figure>
+      <div class="shot"><img src="img/flashing.png" alt="Flash en cours"></div>
+      <figcaption>Pendant le flash : progression et étape en cours.</figcaption>
+    </figure>
+    <figure>
+      <div class="shot"><img src="img/success.png" alt="Flash terminé"></div>
+      <figcaption>Fin du flash : la carte redémarre toute seule.</figcaption>
+    </figure>
+  </div>
+
+  <div class="card info avoid" style="margin-top:6mm">
+    <div class="title">Après le flash</div>
+    <p style="margin:0">La carte redémarre et <strong>conserve son Wi-Fi, son UID, son nom et son token</strong>. Si elle n'a jamais été configurée, elle apparaît en Bluetooth sous le nom <strong>Wanit SC</strong>, prête à être provisionnée. Pour flasher une autre carte, cliquez sur <kbd>Flasher un autre appareil</kbd>.</p>
+  </div>
+</section>
+
+<!-- ================= Autres cas ================= -->
+<section>
+  <h2>3. Autres possibilités</h2>
+
+  <div class="figrow">
+    <figure>
+      <div class="shot"><img src="img/advanced.png" alt="Options avancées"></div>
+      <figcaption>Options avancées, ouvertes avec la roue crantée en haut à droite.</figcaption>
+    </figure>
+    <div>
+      <h3 style="margin-top:0">Options avancées</h3>
+      <table>
+        <tr><td>Variante debug</td><td>Installe la version avec journaux détaillés, utile au diagnostic. <span class="pill no">Pas en production</span> : elle expose des informations sensibles sur le port série.</td></tr>
+        <tr><td>Effacer toute la flash</td><td>Efface toute la mémoire avant d'écrire. Le Wi-Fi, l'UID, le nom et le token sont <strong>perdus</strong> ; une confirmation est demandée.</td></tr>
+        <tr><td>Vitesse de transfert</td><td>921600 bauds par défaut. Si le flash échoue en cours d'écriture (rallonge USB, hub), choisissez une valeur plus basse.</td></tr>
+      </table>
+
+      <h3>Flasher un fichier local</h3>
+      <p>L'onglet <em>Fichier local</em> permet de flasher un <code>.bin</code> reçu par ailleurs (support, test). Le fichier est contrôlé avant le flash :</p>
+      <p style="margin:0"><span class="pill ok">Accepté</span> une image complète <code>…-full.bin</code> pour ESP32-C6.<br>
+      <span class="pill no">Refusé</span> une image OTA <code>…-ota.bin</code>, une image incomplète ou prévue pour une autre puce.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:8mm">
+    <div class="avoid">
+      <h3 style="margin-top:0">Sans connexion Internet</h3>
+      <p>Chaque version flashée une fois reste en mémoire sur le PC. Hors ligne, ces versions restent proposées (mention « hors ligne » sous la liste).</p>
+      <p>Sans aucune version en mémoire, l'utilitaire passe automatiquement sur <em>Fichier local</em> : il suffit alors de fournir le fichier <code>esp32-ble-wifi-uart-bridge-full.bin</code> récupéré sur un autre poste.</p>
+    </div>
+    <figure>
+      <div class="shot"><img src="img/update.png" alt="Bannière de mise à jour"></div>
+      <figcaption>Une nouvelle version de l'utilitaire est disponible.</figcaption>
+    </figure>
+  </div>
+
+  <h3>Mises à jour de l'utilitaire</h3>
+  <p>À chaque lancement, l'utilitaire vérifie s'il existe une version plus récente. Si c'est le cas, une bannière bleue apparaît : cliquez sur <kbd>Mettre à jour</kbd>. La nouvelle version est téléchargée, vérifiée, puis relancée automatiquement. Rien ne se fait sans votre accord, et jamais pendant un flash.</p>
+</section>
+
+<!-- ================= Dépannage ================= -->
+<section>
+  <h2>4. Dépannage</h2>
+  <p>En cas d'échec, un message en rouge indique la cause et la marche à suivre, et le journal détaillé s'ouvre. Un échec ne peut pas endommager la carte : le mode téléchargement est gravé dans la puce, on peut donc toujours corriger le problème et relancer le flash.</p>
+
+  <table style="margin-top:4mm">
+    <tr><th>Symptôme</th><th>Solution</th></tr>
+    <tr><td>Aucun port n'apparaît (« Branchez un appareil »)</td><td>Débranchez et rebranchez le module, ou essayez un autre port USB du PC, sans hub. Au tout premier branchement, laissez à Windows une minute pour installer le pilote. S'il ne s'installe pas, téléchargez le pilote « VCP » sur le site de FTDI (ftdichip.com).</td></tr>
+    <tr><td>« Le Wanit Gateway ne répond pas »</td><td>Vérifiez que le connecteur du module est bien enfoncé sur le connecteur Segger de la carte, et dans le bon sens. Débranchez puis rebranchez le module, et relancez le flash.</td></tr>
+    <tr><td>« Le port COMx est occupé »</td><td>Un autre programme utilise le port : fermez le moniteur série, Arduino IDE, PuTTY, une autre instance de l'utilitaire, etc.</td></tr>
+    <tr><td>« L'appareil … n'est pas un ESP32-C6 »</td><td>Le port sélectionné correspond à un autre appareil. Choisissez le port « Module de flash » dans la liste. Rien n'a été écrit.</td></tr>
+    <tr><td>Échec en cours d'écriture</td><td>Ouvrez la roue crantée et baissez la vitesse de transfert (460800 puis 115200), puis relancez.</td></tr>
+    <tr><td>« Fichier non valide »</td><td>Le fichier local n'est pas une image complète pour ESP32-C6. Utilisez <code>esp32-ble-wifi-uart-bridge-full.bin</code>, jamais <code>…-ota.bin</code>.</td></tr>
+    <tr><td>« GitHub est injoignable »</td><td>Vérifiez la connexion Internet ou le proxy de l'entreprise. En attendant, utilisez une version en mémoire ou un fichier local.</td></tr>
+    <tr><td>L'antivirus bloque le fichier</td><td>Téléchargez-le uniquement depuis le lien officiel (page 1). Ajoutez-le aux exceptions de l'antivirus si votre politique le permet.</td></tr>
+  </table>
+
+  <figure style="margin-top:7mm" class="figrow">
+    <div class="shot"><img src="img/error.png" alt="Message d'erreur"></div>
+    <div>
+      <div class="card tint">
+        <div class="title">Contacter le support</div>
+        <ol class="steps light">
+          <li><div>Cliquez sur <kbd>Journal</kbd> en bas de la fenêtre.</div></li>
+          <li><div>Cliquez sur <kbd>Copier</kbd>.</div></li>
+          <li><div>Collez le texte dans votre demande, avec le message d'erreur affiché et la référence de la carte.</div></li>
+        </ol>
+      </div>
+      <p style="margin-top:5mm; font-size:9pt; color: var(--muted)">Documentation du firmware (protocole, guides d'intégration, notes de version) :<br><span class="link">github.com/Math0XK/wanit-gateway-releases</span></p>
+    </div>
+  </figure>
+</section>
+
+</body>
+</html>

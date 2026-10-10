@@ -59,7 +59,7 @@
 <section class="hero">
   <div class="wrap">
     <h1>Flashez votre Wanit Gateway en un clic</h1>
-    <p>Branchez la carte en USB, choisissez la version, cliquez sur Flasher. Pas d'installation, pas de ligne de commande.</p>
+    <p>Branchez le module de flash, choisissez la version, cliquez sur Flasher. Pas d'installation, pas de ligne de commande.</p>
     <a class="download" id="download" href="https://github.com/Math0XK/wanit-gateway-flasher/releases/latest/download/WanitGatewayFlasher.exe">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg>
       Télécharger pour Windows
@@ -73,7 +73,7 @@
     <h2>Utilisation</h2>
     <ol class="steps">
       <li><div>Lancez <strong>WanitGatewayFlasher.exe</strong>. Il n'y a rien à installer.</div></li>
-      <li><div>Branchez le Wanit Gateway en USB. Le port est détecté automatiquement.</div></li>
+      <li><div>Branchez le module de flash fourni sur le connecteur Segger du Wanit Gateway, puis sur un port USB du PC. Il est détecté automatiquement.</div></li>
       <li><div>La dernière version du firmware est sélectionnée par défaut. Vous pouvez en choisir une autre, ou un fichier <code>.bin</code> local.</div></li>
       <li><div>Cliquez sur <strong>Flasher</strong>. L'appareil redémarre à la fin et conserve son Wi-Fi et ses réglages.</div></li>
     </ol>
@@ -99,7 +99,7 @@
 
   <div class="card">
     <h2>Besoin d'aide ?</h2>
-    <p class="muted" style="margin:0 0 8px">Si le flash échoue, le message affiché indique quoi faire. Le plus souvent, l'ESP32 n'est pas passé en mode téléchargement : maintenez <kbd>BOOT</kbd> enfoncé, appuyez sur <kbd>RESET</kbd>, relâchez <kbd>BOOT</kbd>, puis relancez.</p>
+    <p class="muted" style="margin:0 0 8px">Si le flash échoue, le message affiché indique quoi faire. Le plus souvent, le connecteur du module est mal enfoncé ou à l'envers sur le connecteur Segger de la carte : rebranchez-le, puis relancez.</p>
     <p class="muted" style="margin:0">Pour le support, ouvrez le <strong>Journal</strong> dans l'utilitaire, cliquez sur <strong>Copier</strong> et joignez-le à votre demande. Les binaires du firmware et leur documentation sont sur <a href="https://github.com/Math0XK/wanit-gateway-releases/releases">wanit-gateway-releases</a>.</p>
   </div>
 </main>

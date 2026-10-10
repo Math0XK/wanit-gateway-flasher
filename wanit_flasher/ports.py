@@ -9,9 +9,9 @@ from serial.tools import list_ports
 ESPRESSIF_VID = 0x303A
 # Ponts USB-série courants sur les cartes ESP32
 BRIDGE_VIDS = {
-    0x10C4: "CP210x",
-    0x1A86: "CH340/CH9102",
-    0x0403: "FTDI",
+    0x10C4: "Adaptateur CP210x",
+    0x1A86: "Adaptateur CH340/CH9102",
+    0x0403: "Module de flash (FTDI)",  # module fourni par Wanit : USB vers connecteur Segger
 }
 
 
@@ -36,7 +36,7 @@ def scan() -> list[Port]:
         if info.vid == ESPRESSIF_VID:
             kind, desc = "espressif", "ESP32 (USB natif)"
         elif info.vid in BRIDGE_VIDS:
-            kind, desc = "bridge", f"Adaptateur {BRIDGE_VIDS[info.vid]}"
+            kind, desc = "bridge", BRIDGE_VIDS[info.vid]
         elif info.vid is None:
             # Ports sans USB (Bluetooth, ports matériels) : peu probables pour un ESP32
             continue

@@ -2,9 +2,17 @@ name: Release
 
 # Pousser un tag vX.Y.Z (identique à __version__) construit l'exe et publie la release.
 # L'utilitaire déjà installé chez les utilisateurs se met à jour à partir de cette release.
+# Lancement manuel possible depuis l'onglet Actions (« Run workflow ») pour un tag déjà poussé,
+# par exemple si le build ne s'est pas déclenché ou pour reconstruire une release.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag à construire et publier (ex. v1.0.1), déjà présent sur GitHub"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,8 +20,12 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
 
       - uses: actions/setup-python@v5
         with:
@@ -23,8 +35,8 @@ jobs:
         shell: pwsh
         run: |
           $version = python -c "import wanit_flasher; print(wanit_flasher.__version__)"
-          if ("v$version" -ne "${{ github.ref_name }}") {
-            Write-Error "Le tag ${{ github.ref_name }} ne correspond pas à __version__ = $version"
+          if ("v$version" -ne $env:TAG) {
+            Write-Error "Le tag $env:TAG ne correspond pas à __version__ = $version"
             exit 1
           }
 
@@ -36,11 +48,14 @@ jobs:
       - name: Construire l'exe
         run: python tools/build.py
 
-      # Emplacement prévu pour la signature de code (Azure Artifact Signing ou certificat OV),
-      # à ajouter avant la publication une fois le certificat obtenu.
+      # Exe non signé (pas de certificat de code) : les avertissements Windows sont documentés
+      # dans le README et le guide d'installation.
 
+      # Sur un relancement, la release existante est mise à jour et l'exe remplacé.
       - name: Publier la release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           files: dist/WanitGatewayFlasher.exe
           generate_release_notes: true
+          overwrite_files: true

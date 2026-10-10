@@ -146,13 +146,13 @@ def explain(exc: Exception, port: str) -> str:
         if "permission" in text or "access is denied" in text or "accès refusé" in text:
             return f"Le port {port} est occupé. Fermez le moniteur série ou l'autre programme qui l'utilise, puis réessayez."
         if "filenotfound" in text or "cannot find" in text or "no such file" in text:
-            return f"Le port {port} n'existe plus. Vérifiez le câble et rafraîchissez la liste."
-        return f"Communication interrompue sur {port}. Vérifiez le câble USB et réessayez."
+            return f"Le port {port} n'existe plus. Vérifiez que le module de flash est branché, puis rafraîchissez la liste."
+        return f"Communication interrompue sur {port}. Vérifiez le branchement du module de flash et réessayez."
     if isinstance(exc, FatalError):
         if "failed to connect" in text or "no serial data" in text or "timed out" in text:
             return (
-                "L'ESP32 ne répond pas. Maintenez le bouton BOOT enfoncé, appuyez sur RESET, "
-                "relâchez BOOT, puis relancez le flash. Vérifiez aussi que le câble transmet les données."
+                "Le Wanit Gateway ne répond pas. Vérifiez que le connecteur du module de flash est bien enfoncé "
+                "sur la carte, dans le bon sens, puis débranchez et rebranchez le module avant de relancer le flash."
             )
         if "wrong chip" in text or "unexpected chip" in text:
             return f"L'appareil connecté n'est pas un {TARGET_CHIP}."
