@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wanit Gateway Flasher</title>
+<meta name="description" content="Flashez le firmware du Wanit Gateway (ESP32-C6) en un clic depuis Windows.">
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  :root {
+    --blue: #209BD7; --blue-hover: #1A84B8; --blue-tint: #E8F5FC; --blue-text: #16729F;
+    --navy: #263850; --muted: #6B7C93; --hint: #8A99AD; --bg: #F4F7FA; --card: #FFFFFF;
+    --border: #D3DBE4; --warn: #8A5A0B; --warn-tint: #FFF6E5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--navy); font: 16px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  a { color: var(--blue-text); }
+  header { background: var(--navy); }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; height: 68px; }
+  .brand img.mark { height: 36px; }
+  .brand img.word { height: 14px; display: block; }
+  .brand small { color: #A9B8CC; font-size: 12px; }
+  .hero { background: var(--navy); color: #fff; padding: 36px 0 56px; }
+  .hero h1 { margin: 0 0 8px; font-size: 30px; font-weight: 600; line-height: 1.25; }
+  .hero p { margin: 0 0 28px; color: #C9D4E2; max-width: 560px; }
+  .download { display: inline-flex; align-items: center; gap: 10px; background: var(--blue); color: #fff; text-decoration: none;
+    font-weight: 600; font-size: 17px; padding: 14px 26px; border-radius: 8px; }
+  .download:hover { background: var(--blue-hover); }
+  .download svg { width: 20px; height: 20px; }
+  .meta { margin-top: 12px; font-size: 13px; color: #A9B8CC; }
+  .meta a { color: #A9B8CC; }
+  main { margin-top: -24px; padding-bottom: 48px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  h2 { font-size: 19px; font-weight: 600; margin: 0 0 14px; }
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; display: grid; gap: 14px; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start; }
+  ol.steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; background: var(--blue-tint);
+    color: var(--blue-text); font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+  .warn { background: var(--warn-tint); border-color: #F1D9A8; }
+  .warn h2 { color: var(--warn); }
+  .warn p { margin: 0 0 12px; }
+  .warn h3 { font-size: 15px; margin: 18px 0 8px; }
+  .warn ol { margin: 0; padding-left: 22px; }
+  kbd { font: inherit; font-weight: 600; background: #fff; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+  .muted { color: var(--muted); font-size: 14px; }
+  footer { text-align: center; color: var(--hint); font-size: 13px; padding: 0 20px 32px; }
+  @media (max-width: 520px) { .hero h1 { font-size: 24px; } .download { width: 100%; justify-content: center; } .card { padding: 18px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap brand">
+    <img class="mark" src="mark.png" alt="">
+    <div><img class="word" src="wordmark_white.png" alt="Wanit"><small>Gateway Flasher</small></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>Flashez votre Wanit Gateway en un clic</h1>
+    <p>Branchez la carte en USB, choisissez la version, cliquez sur Flasher. Pas d'installation, pas de ligne de commande.</p>
+    <a class="download" id="download" href="https://github.com/Math0XK/wanit-gateway-flasher/releases/latest/download/WanitGatewayFlasher.exe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg>
+      Télécharger pour Windows
+    </a>
+    <div class="meta"><span id="version">Dernière version</span> · Windows 10 et 11 (64 bits) · <a href="https://github.com/Math0XK/wanit-gateway-flasher/releases">toutes les versions</a></div>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="card">
+    <h2>Utilisation</h2>
+    <ol class="steps">
+      <li><div>Lancez <strong>WanitGatewayFlasher.exe</strong>. Il n'y a rien à installer.</div></li>
+      <li><div>Branchez le Wanit Gateway en USB. Le port est détecté automatiquement.</div></li>
+      <li><div>La dernière version du firmware est sélectionnée par défaut. Vous pouvez en choisir une autre, ou un fichier <code>.bin</code> local.</div></li>
+      <li><div>Cliquez sur <strong>Flasher</strong>. L'appareil redémarre à la fin et conserve son Wi-Fi et ses réglages.</div></li>
+    </ol>
+  </div>
+
+  <div class="card warn">
+    <h2>Windows affiche un avertissement ? C'est normal</h2>
+    <p>L'utilitaire n'est pas signé avec un certificat payant. Windows et votre navigateur se méfient donc d'un programme qu'ils ne connaissent pas encore. Le fichier est publié directement par Wanit sur GitHub et son empreinte est vérifiable sur la page de la release.</p>
+
+    <h3>Dans le navigateur (Edge ou Chrome)</h3>
+    <ol>
+      <li>Si le téléchargement est signalé comme « peu courant », ouvrez le menu <kbd>…</kbd> à côté du fichier.</li>
+      <li>Choisissez <kbd>Conserver</kbd>, puis <kbd>Afficher plus</kbd> et <kbd>Conserver quand même</kbd>.</li>
+    </ol>
+
+    <h3>Au premier lancement (« Windows a protégé votre ordinateur »)</h3>
+    <ol>
+      <li>Cliquez sur <kbd>Informations complémentaires</kbd>.</li>
+      <li>Vérifiez que le fichier s'appelle bien <strong>WanitGatewayFlasher.exe</strong>, puis cliquez sur <kbd>Exécuter quand même</kbd>.</li>
+    </ol>
+    <p class="muted" style="margin:14px 0 0">Ces avertissements n'apparaissent qu'une fois. Par la suite, l'utilitaire se met à jour lui-même.</p>
+  </div>
+
+  <div class="card">
+    <h2>Besoin d'aide ?</h2>
+    <p class="muted" style="margin:0 0 8px">Si le flash échoue, le message affiché indique quoi faire. Le plus souvent, l'ESP32 n'est pas passé en mode téléchargement : maintenez <kbd>BOOT</kbd> enfoncé, appuyez sur <kbd>RESET</kbd>, relâchez <kbd>BOOT</kbd>, puis relancez.</p>
+    <p class="muted" style="margin:0">Pour le support, ouvrez le <strong>Journal</strong> dans l'utilitaire, cliquez sur <strong>Copier</strong> et joignez-le à votre demande. Les binaires du firmware et leur documentation sont sur <a href="https://github.com/Math0XK/wanit-gateway-releases/releases">wanit-gateway-releases</a>.</p>
+  </div>
+</main>
+
+<footer>Logiciel libre sous licence GPL v3 · <a href="https://github.com/Math0XK/wanit-gateway-flasher">code source</a></footer>
+
+<script>
+  // Affiche le numéro et la taille de la dernière version ; le lien de téléchargement marche sans.
+  fetch("https://api.github.com/repos/Math0XK/wanit-gateway-flasher/releases/latest")
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(release => {
+      const exe = (release.assets || []).find(a => a.name === "WanitGatewayFlasher.exe");
+      const size = exe ? " · " + Math.round(exe.size / 1e6) + " Mo" : "";
+      document.getElementById("version").textContent = "Version " + release.tag_name.replace(/^v/, "") + size;
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>

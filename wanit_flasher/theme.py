@@ -1,0 +1,29 @@
+"""Charte graphique Wanit appliquée à l'interface."""
+
+# Couleurs relevées sur le logo officiel
+BLUE = "#209BD7"
+BLUE_HOVER = "#1A84B8"
+BLUE_TINT = "#E8F5FC"
+BLUE_TEXT = "#16729F"
+NAVY = "#263850"
+NAVY_MUTED = "#A9B8CC"
+
+BG = "#F4F7FA"
+CARD = "#FFFFFF"
+FIELD = "#F7F9FB"
+BORDER = "#D3DBE4"
+DIVIDER = "#EEF2F6"
+TEXT = NAVY
+TEXT_MUTED = "#6B7C93"
+TEXT_HINT = "#8A99AD"
+DISABLED = "#B5C1CF"
+
+SUCCESS = "#1F9D6A"
+SUCCESS_TINT = "#E3F6EE"
+WARNING = "#B9770E"
+DANGER = "#C0392B"
+DANGER_TINT = "#FDECEA"
+
+FONT = "Segoe UI"
+MONO = "Consolas"
+RADIUS = 6

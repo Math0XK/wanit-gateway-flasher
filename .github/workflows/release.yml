@@ -1,0 +1,46 @@
+name: Release
+
+# Pousser un tag vX.Y.Z (identique à __version__) construit l'exe et publie la release.
+# L'utilitaire déjà installé chez les utilisateurs se met à jour à partir de cette release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Vérifier que le tag correspond à la version
+        shell: pwsh
+        run: |
+          $version = python -c "import wanit_flasher; print(wanit_flasher.__version__)"
+          if ("v$version" -ne "${{ github.ref_name }}") {
+            Write-Error "Le tag ${{ github.ref_name }} ne correspond pas à __version__ = $version"
+            exit 1
+          }
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller==6.22.3
+
+      - name: Construire l'exe
+        run: python tools/build.py
+
+      # Emplacement prévu pour la signature de code (Azure Artifact Signing ou certificat OV),
+      # à ajouter avant la publication une fois le certificat obtenu.
+
+      - name: Publier la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/WanitGatewayFlasher.exe
+          generate_release_notes: true
