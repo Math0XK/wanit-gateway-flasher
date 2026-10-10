@@ -1,6 +1,6 @@
 """Wanit Gateway Flasher : flasheur graphique pour le firmware du Wanit Gateway (ESP32-C6)."""
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 APP_NAME = "Wanit Gateway Flasher"
 
