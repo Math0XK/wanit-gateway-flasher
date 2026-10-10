@@ -578,10 +578,12 @@ class App(ctk.CTk):
             if job["release"]:
                 release, asset = job["release"], job["asset"]
                 log(f"Firmware {release.tag} : {asset.name}")
+                sha256 = github.expected_sha256(release, asset)
                 image = github.download(
-                    asset, github.firmware_path(release, asset), lambda done, total: self.post(self._on_progress, "download", done, total)
+                    asset, github.firmware_path(release, asset), sha256,
+                    lambda done, total: self.post(self._on_progress, "download", done, total),
                 )
-                log("Empreinte SHA-256 vérifiée" if asset.sha256 else "Pas d'empreinte publiée pour ce fichier")
+                log(f"Empreinte SHA-256 vérifiée : {sha256}")
             else:
                 image = job["local"]
                 log(f"Fichier local : {image}")

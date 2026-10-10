@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,6 +17,7 @@ from .paths import cache_dir
 API = "https://api.github.com"
 TIMEOUT = 15
 CHUNK = 64 * 1024
+SUMS_ASSET = "SHA256SUMS.txt"
 
 ProgressFn = Callable[[int, int], None]
 
@@ -40,7 +42,7 @@ class Asset:
             name=data["name"],
             url=data["browser_download_url"],
             size=data["size"],
-            sha256=digest.removeprefix("sha256:") if digest.startswith("sha256:") else None,
+            sha256=digest.removeprefix("sha256:").lower() if digest.startswith("sha256:") else None,
         )
 
 
@@ -69,6 +71,24 @@ def parse_version(tag: str) -> tuple[int, ...]:
     return tuple(int(p) for p in match.group(1).split(".")) if match else ()
 
 
+class _HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse toute redirection qui quitterait HTTPS (GitHub redirige les téléchargements vers son CDN)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not newurl.lower().startswith("https://"):
+            raise urllib.error.URLError(f"redirection non sécurisée refusée : {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_HttpsOnlyRedirect)
+
+
+def _open(request: urllib.request.Request):
+    if not request.full_url.lower().startswith("https://"):
+        raise urllib.error.URLError(f"adresse non sécurisée refusée : {request.full_url}")
+    return _opener.open(request, timeout=TIMEOUT)
+
+
 def _request(url: str, accept: str = "application/vnd.github+json") -> urllib.request.Request:
     return urllib.request.Request(
         url,
@@ -78,7 +98,7 @@ def _request(url: str, accept: str = "application/vnd.github+json") -> urllib.re
 
 def get_json(path: str):
     try:
-        with urllib.request.urlopen(_request(f"{API}{path}"), timeout=TIMEOUT) as resp:
+        with _open(_request(f"{API}{path}")) as resp:
             return json.load(resp)
     except Exception as exc:  # réseau, HTTP, JSON : tout est traité comme « hors ligne »
         raise GitHubError(str(exc), getattr(exc, "code", None)) from exc
@@ -102,31 +122,58 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download(asset: Asset, dest: Path, progress: ProgressFn | None = None) -> Path:
-    """Télécharge `asset` vers `dest` en vérifiant son SHA-256. Réutilise `dest` s'il est déjà valide."""
-    if dest.exists() and dest.stat().st_size == asset.size:
-        if asset.sha256 is None or sha256_file(dest) == asset.sha256:
-            if progress:
-                progress(asset.size, asset.size)
-            return dest
+def expected_sha256(release: Release, asset: Asset) -> str:
+    """Empreinte attendue d'un fichier : celle publiée par GitHub, sinon celle de SHA256SUMS.txt.
+
+    Sans empreinte vérifiable, le fichier est refusé.
+    """
+    if asset.sha256:
+        return asset.sha256
+    sums = release.assets.get(SUMS_ASSET)
+    if sums is not None and sums.sha256:
+        try:
+            with _open(_request(sums.url, "application/octet-stream")) as resp:
+                raw = resp.read(64 * 1024)
+        except Exception as exc:
+            raise GitHubError(f"Lecture de {SUMS_ASSET} impossible : {exc}") from exc
+        if hashlib.sha256(raw).hexdigest() == sums.sha256:
+            for line in raw.decode("utf-8", "replace").splitlines():
+                parts = line.split()
+                if len(parts) == 2 and parts[1].lstrip("*") == asset.name and re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
+                    return parts[0].lower()
+    raise GitHubError(f"Aucune empreinte SHA-256 publiée pour {asset.name} : fichier refusé par sécurité.")
+
+
+def download(asset: Asset, dest: Path, sha256: str, progress: ProgressFn | None = None) -> Path:
+    """Télécharge `asset` vers `dest` et vérifie qu'il correspond à `sha256`. Réutilise `dest` s'il est déjà valide."""
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256 or ""):
+        raise GitHubError(f"Empreinte SHA-256 manquante pour {asset.name} : fichier refusé par sécurité.")
+    if dest.exists() and dest.stat().st_size == asset.size and sha256_file(dest) == sha256:
+        if progress:
+            progress(asset.size, asset.size)
+        return dest
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(dest.name + ".part")
     digest = hashlib.sha256()
     done = 0
     try:
-        with urllib.request.urlopen(_request(asset.url, "application/octet-stream"), timeout=TIMEOUT) as resp, open(tmp, "wb") as out:
+        with _open(_request(asset.url, "application/octet-stream")) as resp, open(tmp, "wb") as out:
             while chunk := resp.read(CHUNK):
+                done += len(chunk)
+                if done > asset.size:
+                    raise GitHubError("taille supérieure à celle annoncée")
                 out.write(chunk)
                 digest.update(chunk)
-                done += len(chunk)
                 if progress:
                     progress(done, asset.size)
+        if done != asset.size:
+            raise GitHubError(f"fichier incomplet ({done} octets sur {asset.size})")
     except Exception as exc:
         tmp.unlink(missing_ok=True)
         raise GitHubError(f"Téléchargement de {asset.name} impossible : {exc}") from exc
 
-    if asset.sha256 and digest.hexdigest() != asset.sha256:
+    if digest.hexdigest() != sha256:
         tmp.unlink(missing_ok=True)
         raise GitHubError(f"Empreinte SHA-256 invalide pour {asset.name} : fichier corrompu ou modifié.")
     tmp.replace(dest)
@@ -154,8 +201,18 @@ def firmware_releases(repo: str) -> tuple[list[Release], bool]:
     return [Release.from_api(r) for r in raw], offline
 
 
+_FORBIDDEN = set('/:*?"<>|' + chr(92))  # chr(92) : barre oblique inverse
+
+
+def _safe_name(name: str) -> str:
+    """Nom de fichier ou de dossier sûr : pas de séparateur ni de remontée dans l'arborescence."""
+    if not name or name in (".", "..") or any(c in _FORBIDDEN or ord(c) < 32 for c in name):
+        raise GitHubError(f"Nom refusé : {name!r}")
+    return name
+
+
 def firmware_path(release: Release, asset: Asset) -> Path:
-    return cache_dir() / "firmware" / release.tag / asset.name
+    return cache_dir() / "firmware" / _safe_name(release.tag) / _safe_name(asset.name)
 
 
 def is_cached(release: Release, asset: Asset) -> bool:

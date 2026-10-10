@@ -47,7 +47,8 @@ def check() -> Update | None:
 
 
 def can_self_update(update: Update) -> bool:
-    return is_frozen() and sys.platform == "win32" and update.asset is not None
+    # Sans empreinte publiée, l'exe ne peut pas être vérifié : on renvoie vers la page GitHub
+    return is_frozen() and sys.platform == "win32" and update.asset is not None and bool(update.asset.sha256)
 
 
 def install(update: Update, progress: ProgressFn) -> None:
@@ -60,7 +61,7 @@ def install(update: Update, progress: ProgressFn) -> None:
     new = exe.with_suffix(".new")
     old = exe.with_suffix(".old")
     try:
-        download(update.asset, new, progress)
+        download(update.asset, new, update.asset.sha256, progress)
         old.unlink(missing_ok=True)
         exe.rename(old)
         try:

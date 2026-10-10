@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Actions GitHub figées sur un commit : Dependabot propose les nouvelles versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  # Dépendances Python (requirements.txt). Après une mise à jour, régénérer requirements-build.lock
+  # (voir README, section Développement).
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly

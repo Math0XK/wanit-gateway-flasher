@@ -41,7 +41,9 @@ class ImageCheck:
 def check_image(path: Path) -> ImageCheck:
     """Vérifie qu'un fichier est bien une image complète ESP32-C6 à flasher en 0x0."""
     try:
-        data = path.read_bytes()[: PARTITION_TABLE_OFFSET + 2]
+        # Seuls l'en-tête et la table de partitions servent : inutile de charger tout le fichier
+        with open(path, "rb") as fh:
+            data = fh.read(PARTITION_TABLE_OFFSET + 2)
         size = path.stat().st_size
     except OSError as exc:
         return ImageCheck(False, f"Lecture impossible : {exc.strerror or exc}")

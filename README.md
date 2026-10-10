@@ -22,7 +22,11 @@ L'appareil redémarre à la fin. S'il n'est pas encore provisionné, il apparaî
 
 ### Avertissements de Windows : c'est normal
 
-L'exécutable n'est pas signé avec un certificat de code payant. Windows et les navigateurs se méfient donc d'un programme qu'ils ne connaissent pas encore. Le fichier est publié directement sur GitHub, et son empreinte SHA-256 est affichée sur la page de chaque release.
+L'exécutable n'est pas signé avec un certificat de code payant. Windows et les navigateurs se méfient donc d'un programme qu'ils ne connaissent pas encore. Le fichier est publié directement sur GitHub, et son empreinte SHA-256 est affichée sur la page de chaque release. Pour vérifier un fichier téléchargé, comparez-la au résultat de cette commande PowerShell :
+
+```powershell
+Get-FileHash .\WanitGatewayFlasher.exe
+```
 
 - **Au téléchargement (Edge, Chrome)** : si le fichier est signalé comme « peu courant », ouvrez le menu **…** à côté du téléchargement, puis **Conserver** → **Afficher plus** → **Conserver quand même**.
 - **Au premier lancement** (« Windows a protégé votre ordinateur ») : cliquez sur **Informations complémentaires**, vérifiez que le fichier s'appelle bien `WanitGatewayFlasher.exe`, puis **Exécuter quand même**.
@@ -82,9 +86,20 @@ python -m wanit_flasher
 
 ### Construire l'exécutable
 
+La CI installe les dépendances depuis `requirements-build.lock`, qui fige toutes les versions (y compris indirectes) avec leurs empreintes :
+
 ```bash
-pip install pyinstaller
+pip install --require-hashes --no-deps -r requirements-build.lock
+```
+
+```bash
 python tools/build.py
+```
+
+Après toute modification de `requirements.txt` ou de `requirements-build.in`, régénérez le fichier verrouillé :
+
+```bash
+uv pip compile requirements-build.in --python-version 3.13 --python-platform x86_64-pc-windows-msvc --generate-hashes --no-header -o requirements-build.lock
 ```
 
 ### Publier une version
