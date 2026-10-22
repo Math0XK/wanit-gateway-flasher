@@ -18,6 +18,8 @@ API = "https://api.github.com"
 TIMEOUT = 15
 CHUNK = 64 * 1024
 SUMS_ASSET = "SHA256SUMS.txt"
+MANIFEST_ASSET = "release-manifest.json"
+SIGNATURE_ASSET = "release-manifest.sig"
 
 ProgressFn = Callable[[int, int], None]
 
@@ -123,25 +125,56 @@ def sha256_file(path: Path) -> str:
 
 
 def expected_sha256(release: Release, asset: Asset) -> str:
-    """Empreinte attendue d'un fichier : celle publiée par GitHub, sinon celle de SHA256SUMS.txt.
+    """Vérifie le manifeste signé par une clé firmware épinglée et renvoie le hash demandé."""
+    manifest_asset = release.assets.get(MANIFEST_ASSET)
+    signature_asset = release.assets.get(SIGNATURE_ASSET)
+    if not manifest_asset or not signature_asset:
+        raise GitHubError("Release non signée : manifeste de firmware absent.")
+    try:
+        with _open(_request(manifest_asset.url, "application/octet-stream")) as resp:
+            raw = resp.read(256 * 1024 + 1)
+        with _open(_request(signature_asset.url, "application/octet-stream")) as resp:
+            signature = resp.read(4096)
+        if len(raw) > 256 * 1024 or not signature:
+            raise ValueError("taille de manifeste ou signature invalide")
+        document = json.loads(raw)
+        canonical = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if raw != canonical:
+            raise ValueError("JSON non canonique")
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from .paths import resource
 
-    Sans empreinte vérifiable, le fichier est refusé.
-    """
-    if asset.sha256:
-        return asset.sha256
-    sums = release.assets.get(SUMS_ASSET)
-    if sums is not None and sums.sha256:
-        try:
-            with _open(_request(sums.url, "application/octet-stream")) as resp:
-                raw = resp.read(64 * 1024)
-        except Exception as exc:
-            raise GitHubError(f"Lecture de {SUMS_ASSET} impossible : {exc}") from exc
-        if hashlib.sha256(raw).hexdigest() == sums.sha256:
-            for line in raw.decode("utf-8", "replace").splitlines():
-                parts = line.split()
-                if len(parts) == 2 and parts[1].lstrip("*") == asset.name and re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
-                    return parts[0].lower()
-    raise GitHubError(f"Aucune empreinte SHA-256 publiée pour {asset.name} : fichier refusé par sécurité.")
+        repository = release.page_url.split("/releases")[0].removeprefix("https://github.com/")
+        key_names = (
+            ("app_release_public_key.pem",)
+            if repository == "Math0XK/wanit-gateway-flasher"
+            else ("firmware_release_public_key.pem", "firmware_release_public_key_backup.pem")
+        )
+        valid_signature = False
+        for key_name in key_names:
+            key = serialization.load_pem_public_key(resource(key_name).read_bytes())
+            try:
+                key.verify(signature, canonical, ec.ECDSA(hashes.SHA256()))
+                valid_signature = True
+                break
+            except Exception:
+                continue
+        if not valid_signature:
+            raise ValueError("signature ECDSA invalide")
+        if document.get("repository") != repository:
+            raise ValueError("dépôt du manifeste inattendu")
+        if document.get("tag") != release.tag:
+            raise ValueError("version du manifeste inattendue")
+        entries = document.get("assets")
+        if not isinstance(entries, list):
+            raise ValueError("liste d'assets absente")
+        entry = next((item for item in entries if item.get("name") == asset.name), None)
+        if not entry or entry.get("size") != asset.size or not re.fullmatch(r"[0-9a-f]{64}", entry.get("sha256", "")):
+            raise ValueError(f"{asset.name} absent ou incohérent dans le manifeste signé")
+        return entry["sha256"]
+    except Exception as exc:
+        raise GitHubError(f"Vérification du manifeste signé impossible : {exc}") from exc
 
 
 def download(asset: Asset, dest: Path, sha256: str, progress: ProgressFn | None = None) -> Path:

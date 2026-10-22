@@ -44,8 +44,9 @@ Ces avertissements n'apparaissent qu'une fois : ensuite, l'utilitaire se met à 
 ### Sécurités intégrées
 
 - Seules les releases contenant une image complète (`-full.bin`, v1.2.0 et suivantes) sont proposées.
-- Chaque binaire téléchargé est vérifié par son empreinte SHA-256 publiée par GitHub.
-- Un fichier local est contrôlé avant le flash : image complète (bootloader et table de partitions présents) et compilée pour ESP32-C6. Les images OTA (`-ota.bin`) sont refusées.
+- Chaque binaire téléchargé est vérifié par son empreinte SHA-256 provenant d'un manifeste signé, et non par l'empreinte publiée dans la même release GitHub.
+- Les releases firmware et les mises à jour de l'application doivent inclure `release-manifest.json` et `release-manifest.sig`. Elles utilisent des clés de publication dédiées, différentes des clés OTA du Gateway.
+- Un fichier local est contrôlé avant le flash : en-tête ESP, identifiant de puce, taille et table de partitions avec adresses et recouvrements vérifiés. Ces contrôles valident le format, pas l'origine ni l'innocuité du firmware ; utilisez uniquement un fichier provenant d'une source de confiance. Les images OTA (`-ota.bin`) sont refusées.
 - Le flash s'arrête avant toute écriture si la puce détectée n'est pas un ESP32-C6.
 
 ### Sans connexion Internet
@@ -115,7 +116,15 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-Le workflow GitHub Actions construit l'exe et publie la release. Les utilisateurs se voient proposer la mise à jour à leur prochain lancement, et le lien de téléchargement pointe automatiquement vers la nouvelle version.
+Le workflow GitHub Actions construit l'exe sans droit d'écriture, puis publie depuis un job distinct doté de `contents: write`. Configurez l'environnement GitHub `release` avec des approbateurs requis et protégez les tags `v*` contre les modifications et suppressions. Les utilisateurs se voient proposer la mise à jour à leur prochain lancement, et le lien de téléchargement pointe automatiquement vers la nouvelle version.
+
+#### Signer et protéger une release
+
+Les clés publiques sont committées dans le flasher : `app_release_public_key.pem` vérifie les mises à jour de l'application et `firmware_release_public_key.pem` vérifie les manifestes des releases firmware. La seconde est également copiée dans `wanit-gateway/release_manifest_public_key.pem` pour que le workflow vérifie la signature avant publication. Les clés privées de signature sont distinctes des clés OTA du Gateway et ne doivent jamais être committées.
+
+Dans les paramètres GitHub de **wanit-gateway-flasher**, ouvrez **Settings → Environments → release** et ajoutez les secrets `APP_RELEASE_PRIVATE_KEY` (contenu PEM complet de `app_release_private_key.pem`) et `APP_RELEASE_KEY_PASSPHRASE` (phrase utilisée pour chiffrer cette clé). Dans **wanit-gateway**, créez également l'environnement `release` et ajoutez `RELEASE_MANIFEST_PRIVATE_KEY` (contenu PEM complet de `firmware_release_private_key.pem`) et `RELEASE_MANIFEST_KEY_PASSPHRASE`. Ajoutez un approbateur requis à chaque environnement. Le workflow firmware continue d'utiliser ses secrets de publication existants (`PUBLIC_REPO`, `PUBLIC_REPO_TOKEN`) et `OTA_PRIVATE_KEY` pour leur fonction respective.
+
+Sur les deux dépôts qui publient, ouvrez **Settings → Rules → Rulesets** et créez une règle de tags `v*` qui interdit leur mise à jour et leur suppression. Après configuration, les workflows signent les manifestes dans GitHub Actions et publient la signature avec les fichiers de release. Si la clé privée et la clé publique ne correspondent pas, la vérification du workflow arrête la publication.
 
 Si le build ne s'est pas lancé, ou pour reconstruire une release existante : onglet *Actions* → *Release* → *Run workflow*, en indiquant le tag (par exemple `v1.0.1`). Le tag doit déjà exister sur GitHub et correspondre à `__version__`.
 

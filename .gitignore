@@ -4,3 +4,5 @@ build/
 dist/
 *.spec
 .venv/
+*_private_key.pem
+!wanit_flasher/assets/*_release_public_key.pem

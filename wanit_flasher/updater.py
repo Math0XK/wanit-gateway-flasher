@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import FLASHER_ASSET, FLASHER_REPO, __version__
-from .github import Asset, GitHubError, ProgressFn, download, latest_release, parse_version
+from .github import Asset, GitHubError, ProgressFn, Release, download, expected_sha256, latest_release, parse_version
 
 
 @dataclass
@@ -17,6 +17,7 @@ class Update:
     version: str
     page_url: str
     asset: Asset | None
+    release: Release
 
 
 def is_frozen() -> bool:
@@ -43,12 +44,20 @@ def check() -> Update | None:
         raise
     if parse_version(release.tag) <= parse_version(__version__):
         return None
-    return Update(release.tag.lstrip("v"), release.page_url, release.assets.get(FLASHER_ASSET))
+    return Update(release.tag.lstrip("v"), release.page_url, release.assets.get(FLASHER_ASSET), release)
 
 
 def can_self_update(update: Update) -> bool:
-    # Sans empreinte publiée, l'exe ne peut pas être vérifié : on renvoie vers la page GitHub
-    return is_frozen() and sys.platform == "win32" and update.asset is not None and bool(update.asset.sha256)
+    from .paths import resource
+
+    return (
+        is_frozen()
+        and sys.platform == "win32"
+        and update.asset is not None
+        and "release-manifest.json" in update.release.assets
+        and "release-manifest.sig" in update.release.assets
+        and resource("app_release_public_key.pem").is_file()
+    )
 
 
 def install(update: Update, progress: ProgressFn) -> None:
@@ -61,7 +70,8 @@ def install(update: Update, progress: ProgressFn) -> None:
     new = exe.with_suffix(".new")
     old = exe.with_suffix(".old")
     try:
-        download(update.asset, new, update.asset.sha256, progress)
+        sha256 = expected_sha256(update.release, update.asset)
+        download(update.asset, new, sha256, progress)
         old.unlink(missing_ok=True)
         exe.rename(old)
         try:

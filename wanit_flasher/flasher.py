@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import struct
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -19,6 +21,10 @@ ROM_BAUD = 115200
 IMAGE_MAGIC = 0xE9
 PARTITION_TABLE_OFFSET = 0x8000
 PARTITION_MAGIC = b"\xaa\x50"
+PARTITION_ENTRY_SIZE = 32
+PARTITION_TABLE_END = b"\xeb\xeb"
+PARTITION_TABLE_MAX_ENTRIES = 96  # Jusqu'à 95 partitions, plus le marqueur de fin
+MAX_IMAGE_SIZE = 16 * 1024 * 1024
 CHIP_ID_ESP32C6 = 13
 
 LogFn = Callable[[str], None]
@@ -36,6 +42,49 @@ class ImageCheck:
     ok: bool
     message: str
     warning: str | None = None
+    authenticated: bool = False
+
+
+def _locally_signed(path: Path, size: int) -> bool:
+    """True only when an adjacent firmware manifest authenticates this exact file."""
+    manifest_path = path.with_name("release-manifest.json")
+    signature_path = path.with_name("release-manifest.sig")
+    try:
+        with manifest_path.open("rb") as fh:
+            raw = fh.read(256 * 1024 + 1)
+        with signature_path.open("rb") as fh:
+            signature = fh.read(4097)
+        if len(raw) > 256 * 1024 or len(signature) > 4096:
+            return False
+        manifest = json.loads(raw)
+        canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if raw != canonical or manifest.get("repository") != "Math0XK/wanit-gateway-releases":
+            return False
+        entry = next((item for item in manifest.get("assets", []) if item.get("name") == path.name), None)
+        if not entry or entry.get("size") != size or entry.get("sha256") != _file_sha256(path):
+            return False
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from .paths import resource
+
+        for name in ("firmware_release_public_key.pem", "firmware_release_public_key_backup.pem"):
+            key = serialization.load_pem_public_key(resource(name).read_bytes())
+            try:
+                key.verify(signature, canonical, ec.ECDSA(hashes.SHA256()))
+                return True
+            except Exception:
+                pass
+    except Exception:
+        return False
+    return False
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(64 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def check_image(path: Path) -> ImageCheck:
@@ -43,7 +92,7 @@ def check_image(path: Path) -> ImageCheck:
     try:
         # Seuls l'en-tête et la table de partitions servent : inutile de charger tout le fichier
         with open(path, "rb") as fh:
-            data = fh.read(PARTITION_TABLE_OFFSET + 2)
+            data = fh.read(PARTITION_TABLE_OFFSET + PARTITION_ENTRY_SIZE * PARTITION_TABLE_MAX_ENTRIES)
         size = path.stat().st_size
     except OSError as exc:
         return ImageCheck(False, f"Lecture impossible : {exc.strerror or exc}")
@@ -52,16 +101,46 @@ def check_image(path: Path) -> ImageCheck:
         return ImageCheck(False, "Image OTA : elle s'envoie à distance, jamais par câble.")
     if len(data) < 16 or data[0] != IMAGE_MAGIC:
         return ImageCheck(False, "Ce fichier n'est pas une image ESP32.")
+    if size < PARTITION_TABLE_OFFSET + PARTITION_ENTRY_SIZE or size > MAX_IMAGE_SIZE:
+        return ImageCheck(False, "Taille d'image invalide ou supérieure à 16 Mo.")
+    if len(data) < 24 or data[1] == 0 or data[1] > 16:
+        return ImageCheck(False, "En-tête ESP invalide : nombre de segments incorrect.")
     if data[PARTITION_TABLE_OFFSET:PARTITION_TABLE_OFFSET + 2] != PARTITION_MAGIC:
         return ImageCheck(False, "Image incomplète : il faut le fichier « -full.bin » (bootloader et partitions inclus).")
     (chip_id,) = struct.unpack_from("<H", data, 12)
     if chip_id != CHIP_ID_ESP32C6:
         return ImageCheck(False, f"Cette image n'est pas compilée pour l'{TARGET_CHIP}.")
 
+    # Une table ESP-IDF est constituée d'entrées de 32 octets, terminée par 0xEBEB.
+    # Vérifie sa terminaison, les types, les tailles, les offsets et les recouvrements.
+    entries: list[tuple[int, int]] = []
+    terminated = False
+    table = data[PARTITION_TABLE_OFFSET:]
+    for offset in range(0, len(table) - PARTITION_ENTRY_SIZE + 1, PARTITION_ENTRY_SIZE):
+        entry = table[offset:offset + PARTITION_ENTRY_SIZE]
+        if entry[:2] == PARTITION_TABLE_END:
+            terminated = True
+            break
+        if entry[:2] != PARTITION_MAGIC:
+            return ImageCheck(False, "Table de partitions invalide : entrée ou marqueur de fin absent.")
+        partition_offset, partition_size = struct.unpack_from("<II", entry, 4)
+        if partition_size == 0 or partition_offset < 0x9000 or partition_offset + partition_size > 0x1000000:
+            return ImageCheck(False, "Table de partitions invalide : adresse ou taille hors limites.")
+        if any(partition_offset < end and start < partition_offset + partition_size for start, end in entries):
+            return ImageCheck(False, "Table de partitions invalide : partitions qui se chevauchent.")
+        entries.append((partition_offset, partition_offset + partition_size))
+    if not terminated or not entries:
+        return ImageCheck(False, "Table de partitions invalide : marqueur de fin absent ou aucune partition.")
+
     warning = None
     if "debug" in path.name.lower():
         warning = "Variante debug : expose des informations sensibles sur l'UART."
-    return ImageCheck(True, f"Image complète {TARGET_CHIP} · {size / 1_000_000:.1f} Mo".replace(".", ","), warning)
+    return ImageCheck(
+        True,
+        f"Image complète {TARGET_CHIP} · {size / 1_000_000:.1f} Mo".replace(".", ","),
+        warning,
+        _locally_signed(path, size),
+    )
 
 
 # --- Journal esptool -----------------------------------------------------------------

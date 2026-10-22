@@ -355,7 +355,12 @@ class App(ctk.CTk):
         except github.GitHubError:
             self.post(self._on_releases_loaded, [], "error")
             return
-        usable = [r for r in releases if FULL_ASSET in r.assets]
+        usable = [
+            r for r in releases
+            if FULL_ASSET in r.assets
+            and "release-manifest.json" in r.assets
+            and "release-manifest.sig" in r.assets
+        ]
         if offline:
             usable = [r for r in usable if github.is_cached(r, r.assets[FULL_ASSET])]
         self.post(self._on_releases_loaded, usable, "offline" if offline else "online")
@@ -452,7 +457,12 @@ class App(ctk.CTk):
         if self.source.get() == SOURCE_RELEASE:
             warning = "Variante debug : expose des informations sensibles sur l'UART, à ne pas déployer en production." if self.debug_switch.get() else None
         else:
-            warning = self.local_check.warning if self.local_check and self.local_check.ok else None
+            warning = None
+            if self.local_check and self.local_check.ok:
+                if not self.local_check.authenticated:
+                    warning = "Fichier local non authentifié : vérifiez sa provenance avant de le flasher."
+                if self.local_check.warning:
+                    warning = (warning + " " if warning else "") + self.local_check.warning
         if warning:
             self.firmware_warning.configure(text="⚠ " + warning)
             self.firmware_warning.pack(fill="x", pady=(4, 0))
