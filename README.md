@@ -38,8 +38,19 @@ Ces avertissements n'apparaissent qu'une fois : ensuite, l'utilitaire se met à 
 | Option | Effet |
 |---|---|
 | Variante debug | Flashe `-full-debug.bin` (logs verbeux). Expose des informations sensibles sur l'UART : pas pour la production. |
+| Version legacy (retour en arrière) | Installe l'ancien firmware Bluetooth seul, à la place d'une release GitHub (voir ci-dessous). Désactive le choix de version et la variante debug. |
 | Effacer toute la flash | Efface toute la mémoire avant d'écrire : Wi-Fi, UID, nom et token sont perdus. |
 | Vitesse de transfert | 921600 bauds par défaut. Baissez-la si le flash échoue en cours d'écriture (rallonge USB, hub). |
+
+### Revenir à la version legacy (Bluetooth uniquement)
+
+Pour un retour en arrière, activez **Version legacy (retour en arrière)** dans les options avancées (roue crantée) : l'utilitaire installe alors l'ancien firmware Bluetooth seul à la place de la version choisie. Cette version ne recevra plus de mise à jour : son binaire est **embarqué dans l'exécutable** (`wanit_flasher/assets/legacy/`), donc disponible hors ligne et sans publication de release.
+
+- Elle n'a ni Wi-Fi, ni serveur HTTP, ni mise à jour OTA : une confirmation est demandée avant le flash.
+- Elle s'installe par câble comme n'importe quelle version, et annonce le nom Bluetooth `Wanit SC`.
+- Pour revenir à la version actuelle, reflashez-la par câble : une version legacy ne peut pas la recevoir par OTA.
+- La zone de stockage (NVS) est au même emplacement que dans le firmware actuel et n'est pas effacée par le flash, sauf avec l'option d'effacement complet. Le Wi-Fi enregistré n'est toutefois conservé que si le firmware legacy relit les mêmes données (non vérifié).
+- Le binaire est vérifié par son empreinte SHA-256 figée dans le code avant chaque flash.
 
 ### Sécurités intégrées
 

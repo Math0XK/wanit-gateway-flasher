@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from PIL import Image
 
-from . import APP_NAME, FIRMWARE_REPO, TARGET_CHIP, __version__, flasher, github, ports, updater
+from . import APP_NAME, FIRMWARE_REPO, TARGET_CHIP, __version__, flasher, github, legacy, ports, updater
 from . import theme as t
 from .paths import resource
 
@@ -226,8 +226,14 @@ class App(ctk.CTk):
         )
         self.debug_switch = ctk.CTkSwitch(inner, text="Variante debug", command=self._on_options_changed, **switch_style)
         self.debug_switch.pack(anchor="w", pady=3)
+        self.legacy_switch = ctk.CTkSwitch(inner, text="Version legacy (retour en arrière)", command=self._on_legacy_toggled, **switch_style)
+        self.legacy_switch.pack(anchor="w", pady=(3, 0))
+        ctk.CTkLabel(
+            inner, text="Ancien firmware Bluetooth seul : ni Wi-Fi, ni HTTP, ni OTA.",
+            font=font(11), text_color=t.WARNING, height=18, anchor="w",
+        ).pack(fill="x", padx=(46, 0))
         self.erase_switch = ctk.CTkSwitch(inner, text="Effacer toute la flash avant d'écrire", command=self._on_options_changed, **switch_style)
-        self.erase_switch.pack(anchor="w", pady=(3, 0))
+        self.erase_switch.pack(anchor="w", pady=(6, 0))
         ctk.CTkLabel(
             inner, text="Supprime le Wi-Fi provisionné, l'UID, le nom et le token d'authentification.",
             font=font(11), text_color=t.WARNING, height=18, anchor="w",
@@ -373,17 +379,22 @@ class App(ctk.CTk):
             self.release_menu.configure(values=[text], state="disabled")
             self.release_menu.set(text)
             if state != "online":
-                message = "GitHub est injoignable et aucune version n'est en cache. Choisissez un fichier local."
+                message = "GitHub est injoignable et aucune version n'est en cache. Choisissez un fichier local ou activez la version legacy (options avancées)."
                 self.release_info.configure(text=message, text_color=t.WARNING)
                 if self.local_path is None:
                     self.local_info.configure(text=message, text_color=t.WARNING)
-                self.source.set(SOURCE_LOCAL)
-                self._on_source_changed()
+                if not self.is_legacy():
+                    self.source.set(SOURCE_LOCAL)
+                    self._on_source_changed()
         else:
             latest = next((r for r in releases if not r.prerelease), releases[0])
             labels = [self._release_label(r, r is latest) for r in releases]
             self.release_menu.configure(values=labels, state="normal")
             self.release_menu.set(labels[releases.index(latest)])
+        if self.is_legacy():
+            self._release_before_legacy = self.release_menu.get()
+            self.release_menu.set(legacy.LABEL)
+        self._apply_widget_states()
         self._on_release_selected()
 
     @staticmethod
@@ -391,6 +402,30 @@ class App(ctk.CTk):
         day = "/".join(reversed(release.published.split("-"))) if release.published else ""
         tags = " — dernière" if latest else " — pré-version" if release.prerelease else ""
         return f"{release.tag}{tags}   ·   {day}"
+
+    def is_legacy(self) -> bool:
+        return bool(self.legacy_switch.get())
+
+    def _on_legacy_toggled(self) -> None:
+        if self.is_legacy():
+            # Le menu des versions affiche l'entrée legacy, grisée, pour que le choix reste visible
+            self._release_before_legacy = self.release_menu.get()
+            self.source.set(SOURCE_RELEASE)
+            self._on_source_changed()
+            self.release_menu.set(legacy.LABEL)
+        else:
+            previous = getattr(self, "_release_before_legacy", None)
+            if previous:
+                self.release_menu.set(previous)
+        self._apply_widget_states()
+        self._on_release_selected()
+
+    def _apply_widget_states(self) -> None:
+        """États des contrôles hors flash : la version legacy fige le choix du firmware."""
+        legacy_on = self.is_legacy()
+        self.source.configure(state="disabled" if legacy_on else "normal")
+        self.debug_switch.configure(state="disabled" if legacy_on else "normal")
+        self.release_menu.configure(state="normal" if (self.releases and not legacy_on) else "disabled")
 
     def selected_release(self) -> github.Release | None:
         label = self.release_menu.get()
@@ -406,7 +441,10 @@ class App(ctk.CTk):
     def _on_release_selected(self) -> None:
         release, asset = self.selected_release(), self.selected_asset()
         self.notes_link.pack_forget()
-        if release and asset:
+        if self.is_legacy():
+            size = f"{legacy.SIZE / 1_000_000:.1f} Mo".replace(".", ",")
+            self.release_info.configure(text=f"Version figée · {size} · intégrée à l'utilitaire", text_color=t.TEXT_HINT)
+        elif release and asset:
             size = f"{asset.size / 1_000_000:.1f} Mo".replace(".", ",")
             extra = " · en cache" if github.is_cached(release, asset) else ""
             offline = " · hors ligne" if self.releases_state == "offline" else ""
@@ -454,7 +492,9 @@ class App(ctk.CTk):
 
     def _refresh_warning(self) -> None:
         self.after_idle(self._fit)
-        if self.source.get() == SOURCE_RELEASE:
+        if self.is_legacy():
+            warning = "Version legacy : Bluetooth uniquement, sans Wi-Fi, HTTP ni mise à jour OTA. Elle ne recevra plus de mise à jour."
+        elif self.source.get() == SOURCE_RELEASE:
             warning = "Variante debug : expose des informations sensibles sur l'UART, à ne pas déployer en production." if self.debug_switch.get() else None
         else:
             warning = None
@@ -504,6 +544,8 @@ class App(ctk.CTk):
 
     def _target_name(self) -> str | None:
         """Nom court de ce qui va être flashé, ou None si la sélection est incomplète."""
+        if self.is_legacy():
+            return legacy.SHORT_NAME
         if self.source.get() == SOURCE_RELEASE:
             release, asset = self.selected_release(), self.selected_asset()
             if not (release and asset):
@@ -544,15 +586,14 @@ class App(ctk.CTk):
         self.after_idle(self._fit)
         self.busy = busy
         state = "disabled" if busy else "normal"
-        for widget in (self.port_menu, self.source, self.release_menu, self.debug_switch, self.erase_switch, self.baud_menu):
+        for widget in (self.port_menu, self.source, self.release_menu, self.debug_switch, self.legacy_switch, self.erase_switch, self.baud_menu):
             widget.configure(state=state)
         if busy:
             self.progress_frame.pack(fill="x", pady=(12, 0))
         else:
             self.progress.stop()
             self.progress_frame.pack_forget()
-            if not self.releases:
-                self.release_menu.configure(state="disabled")
+            self._apply_widget_states()
         self._refresh_action()
 
     def _start_flash(self) -> None:
@@ -566,6 +607,15 @@ class App(ctk.CTk):
         ):
             return
 
+        if self.is_legacy() and not messagebox.askyesno(
+            APP_NAME,
+            "Vous allez installer la version legacy, uniquement Bluetooth.\n\n"
+            "Le Wanit Gateway perdra le Wi-Fi, le serveur HTTP et les mises à jour OTA. "
+            "Pour revenir à la version actuelle, il faudra la reflasher par câble.\n\nContinuer ?",
+            icon="warning",
+        ):
+            return
+
         self._show_error(None)
         self.log_box.configure(state="normal")
         self.log_box.delete("1.0", "end")
@@ -574,6 +624,7 @@ class App(ctk.CTk):
         job = dict(
             port=port.device,
             target=target,
+            legacy=self.is_legacy(),
             release=self.selected_release() if self.source.get() == SOURCE_RELEASE else None,
             asset=self.selected_asset() if self.source.get() == SOURCE_RELEASE else None,
             local=self.local_path if self.source.get() == SOURCE_LOCAL else None,
@@ -585,7 +636,12 @@ class App(ctk.CTk):
     def _flash_worker(self, job: dict) -> None:
         log = lambda line: self.post(self.append_log, line)  # noqa: E731
         try:
-            if job["release"]:
+            if job["legacy"]:
+                image = legacy.path()
+                if not image.is_file() or github.sha256_file(image) != legacy.SHA256:
+                    raise flasher.FlashError("Le firmware legacy intégré est introuvable ou altéré : retéléchargez l'utilitaire.")
+                log(f"Firmware legacy intégré · SHA-256 vérifié : {legacy.SHA256}")
+            elif job["release"]:
                 release, asset = job["release"], job["asset"]
                 log(f"Firmware {release.tag} : {asset.name}")
                 sha256 = github.expected_sha256(release, asset)
@@ -643,10 +699,11 @@ class App(ctk.CTk):
 
     def _on_flash_done(self, job: dict, mac: str) -> None:
         self._set_busy(False)
-        self.success_label.configure(
-            text=f"{job['target']} est installé sur {job['port']} (MAC {mac}).\n\n"
-            "L'appareil redémarre. S'il n'est pas encore provisionné, il apparaît en BLE sous le nom « Wanit SC »."
-        )
+        if job["legacy"]:
+            after = f"L'appareil redémarre en Bluetooth uniquement, sous le nom « {legacy.BLE_NAME} »."
+        else:
+            after = "L'appareil redémarre. S'il n'est pas encore provisionné, il apparaît en BLE sous le nom « Wanit SC »."
+        self.success_label.configure(text=f"{job['target']} est installé sur {job['port']} (MAC {mac}).\n\n{after}")
         self.body.pack_forget()
         self.success.pack(fill="both", expand=True)
         self._on_release_selected()  # « en cache » est maintenant vrai

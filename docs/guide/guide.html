@@ -227,7 +227,7 @@
 <section>
   <h2>3. Autres possibilités</h2>
 
-  <div class="figrow">
+  <div class="figrow" style="grid-template-columns: 58mm 1fr">
     <figure>
       <div class="shot"><img src="img/advanced.png" alt="Options avancées"></div>
       <figcaption>Options avancées, ouvertes avec la roue crantée en haut à droite.</figcaption>
@@ -236,9 +236,13 @@
       <h3 style="margin-top:0">Options avancées</h3>
       <table>
         <tr><td>Variante debug</td><td>Installe la version avec journaux détaillés, utile au diagnostic. <span class="pill no">Pas en production</span> : elle expose des informations sensibles sur le port série.</td></tr>
+        <tr><td>Version legacy</td><td>Installe l'ancien firmware <strong>Bluetooth seul</strong> à la place d'une release (retour en arrière). Voir ci-dessous.</td></tr>
         <tr><td>Effacer toute la flash</td><td>Efface toute la mémoire avant d'écrire. Le Wi-Fi, l'UID, le nom et le token sont <strong>perdus</strong> ; une confirmation est demandée.</td></tr>
         <tr><td>Vitesse de transfert</td><td>921600 bauds par défaut. Si le flash échoue en cours d'écriture (rallonge USB, hub), choisissez une valeur plus basse.</td></tr>
       </table>
+
+      <h3>Retour à la version legacy</h3>
+      <p>Dans les options avancées, activez <em>Version legacy (retour en arrière)</em> : l'utilitaire réinstalle l'ancien firmware Bluetooth seul. Il n'a <strong>ni Wi-Fi, ni serveur HTTP, ni mise à jour OTA</strong> : une confirmation est demandée. Pour revenir à la version actuelle, reflashez-la par câble avec l'utilitaire.</p>
 
       <h3>Flasher un fichier local</h3>
       <p>L'onglet <em>Fichier local</em> permet de flasher un <code>.bin</code> reçu par ailleurs (support, test). Le fichier est contrôlé avant le flash :</p>
@@ -254,7 +258,7 @@
       <p>Sans aucune version en mémoire, l'utilitaire passe automatiquement sur <em>Fichier local</em> : il suffit alors de fournir le fichier <code>esp32-ble-wifi-uart-bridge-full.bin</code> récupéré sur un autre poste.</p>
     </div>
     <figure>
-      <div class="shot"><img src="img/update.png" alt="Bannière de mise à jour"></div>
+      <div class="shot" style="width:58mm; margin-left:auto"><img src="img/update.png" alt="Bannière de mise à jour"></div>
       <figcaption>Une nouvelle version de l'utilitaire est disponible.</figcaption>
     </figure>
   </div>

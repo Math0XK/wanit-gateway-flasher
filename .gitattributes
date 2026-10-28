@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Binaires : jamais de conversion de fin de ligne
+*.bin binary
+*.ico binary
