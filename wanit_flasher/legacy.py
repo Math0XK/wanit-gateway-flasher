@@ -13,8 +13,8 @@ from .paths import resource
 LABEL = "Legacy — BLE uniquement (retour en arrière)"
 SHORT_NAME = "legacy BLE"
 FILE_NAME = "esp32-ble-serial-legacy-full.bin"
-SHA256 = "7cc5a72a78bbf02435c17ba0c5ac95d7a3b463c870e97c8f53683be7da443d24"
-SIZE = 831264
+SHA256 = "02e744d33d26b2ea13a77357c9c9b9a80e752b22af6281b901da8df3b67af4b7"
+SIZE = 831184
 BLE_NAME = "Wanit SC"
 
 
