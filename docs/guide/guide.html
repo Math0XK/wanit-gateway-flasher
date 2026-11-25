@@ -102,7 +102,7 @@
     </div>
     <h1>Guide d'installation<br>et d'utilisation</h1>
     <p class="sub">Flasher le firmware du Wanit Gateway (ESP32-C6) depuis un PC Windows, sans installation ni ligne de commande.</p>
-    <p class="meta">Utilitaire version 1.0.8 · Novembre 2026 · Logiciel libre sous licence GPL v3</p>
+    <p class="meta">Utilitaire version 1.0.9 · Novembre 2026 · Logiciel libre sous licence GPL v3</p>
   </div>
 
   <div class="cover-body">
@@ -232,7 +232,7 @@
       <p>La mémoire du Wanit Gateway contient deux emplacements de firmware, <code>app0</code> et <code>app1</code> : une mise à jour à distance (OTA) écrit dans l'emplacement libre, puis bascule dessus. Une petite zone, l'<em>otadata</em>, indique lequel démarre.</p>
       <p>Cliquez sur <kbd>Versions</kbd> pour lire, sans rien écrire, la version présente dans chaque emplacement et celle qui démarre (« ← démarre »). La carte redémarre ensuite normalement. Un emplacement « vide » ne contient aucun firmware.</p>
       <h3>Ce que fait le flash par câble</h3>
-      <p style="margin:0">Le firmware est toujours écrit dans <code>app0</code>. L'utilitaire efface ensuite l'en-tête de <code>app1</code>, pour qu'une ancienne version installée par OTA ne puisse plus redémarrer, réécrit l'otadata pour qu'elle désigne <code>app0</code>, puis relit la carte. Si la version qui démarrerait n'est pas celle qui vient d'être écrite, le flash est signalé en échec.</p>
+      <p style="margin:0">Le firmware est toujours écrit dans <code>app0</code>. La zone où la carte range ses réglages (Wi-Fi, UID, nom, token) n'est pas touchée, sauf avec <em>Effacer toute la flash</em>. L'utilitaire efface ensuite l'en-tête de <code>app1</code>, pour qu'une ancienne version installée par OTA ne puisse plus redémarrer, réécrit l'otadata pour qu'elle désigne <code>app0</code>, puis relit la carte. Si la version qui démarrerait n'est pas celle qui vient d'être écrite, le flash est signalé en échec.</p>
     </div>
   </div>
 </section>

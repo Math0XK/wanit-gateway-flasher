@@ -47,7 +47,11 @@ La carte contient deux emplacements (`app0`, `app1`) : une mise à jour OTA écr
 
 ### Ce que fait un flash par câble
 
-L'image `-full.bin` est écrite en 0x0 : bootloader, table de partitions, otadata et `app0`. Elle ne couvre pas `app1`. Un firmware installé auparavant par OTA y restait donc intact et pouvait redémarrer (otadata qui le désigne, rollback, repli du bootloader) alors que l'utilitaire affichait la version qu'il venait d'écrire. Depuis la v1.0.8, après l'écriture :
+L'image `-full.bin` couvre de 0x0 à la fin d'`app0` : bootloader, table de partitions, NVS, otadata et `app0`. Elle ne couvre pas `app1`.
+
+**NVS conservée (v1.0.9).** Dans l'image, la partition NVS (0x9000, 20 Ko) ne contient que des 0xFF. Jusqu'à la v1.0.8, l'image était écrite d'un bloc : la NVS de l'appareil était donc effacée à chaque flash, et avec elle les réglages qui y sont stockés (Wi-Fi, UID, nom, token). Depuis la v1.0.9, une NVS vide dans l'image est sautée à l'écriture et celle de l'appareil reste intacte. Si une image fournit un contenu NVS, il est écrit et remplace celui de l'appareil (le journal le signale). Avec **Effacer toute la flash**, tout est effacé puis écrit, comme avant.
+
+**Ancien firmware OTA.** Un firmware installé auparavant par OTA restait donc intact dans `app1` et pouvait redémarrer (otadata qui le désigne, rollback, repli du bootloader) alors que l'utilitaire affichait la version qu'il venait d'écrire. Depuis la v1.0.8, après l'écriture :
 
 1. le premier secteur de chaque emplacement non couvert par l'image (`app1`) est effacé : l'ancien firmware ne peut plus démarrer ;
 2. l'otadata est réécrite pour désigner l'emplacement flashé, avec l'état `VALID`, quelle que soit l'otadata contenue dans l'image ;
@@ -81,6 +85,7 @@ Pour un retour en arrière, activez **Version legacy (retour en arrière)** dans
 - Les releases firmware et les mises à jour de l'application doivent inclure `release-manifest.json` et `release-manifest.sig`. Elles utilisent des clés de publication dédiées, différentes des clés OTA du Gateway.
 - Un fichier local est contrôlé avant le flash : en-tête ESP, identifiant de puce, taille et table de partitions avec adresses et recouvrements vérifiés. Ces contrôles valident le format, pas l'origine ni l'innocuité du firmware ; utilisez uniquement un fichier provenant d'une source de confiance. Les images OTA (`-ota.bin`) sont refusées.
 - Le flash s'arrête avant toute écriture si la puce détectée n'est pas un ESP32-C6.
+- La NVS de l'appareil (Wi-Fi, UID, nom, token) n'est pas réécrite quand l'image la laisse vide.
 - Après l'écriture, l'ancien emplacement OTA est neutralisé, l'otadata désigne l'emplacement flashé et la version qui démarrera est vérifiée (voir « Ce que fait un flash par câble »).
 
 ### Sans connexion Internet
@@ -120,7 +125,7 @@ L'application se lance comme un module (`python -m wanit_flasher`), pas via `pyt
 
 ### Simuler un appareil sans matériel
 
-`tools/simulate_device.py` lance la vraie interface avec un ESP32-C6 virtuel, dans l'état d'un banc mis à jour par OTA : `app0` contient la dernière release, `app1` une copie dont la version est remplacée par `v2.0.0`, et l'otadata désigne `app1`. Au premier redémarrage après un flash, le firmware simulé déclenche un rollback (pire cas). Seuls le port série et esptool sont simulés : l'image est la vraie release, téléchargée et vérifiée.
+`tools/simulate_device.py` lance la vraie interface avec un ESP32-C6 virtuel, dans l'état d'un banc provisionné puis mis à jour par OTA : `app0` contient la dernière release, `app1` une copie dont la version est remplacée par `v2.0.0`, l'otadata désigne `app1` et la NVS contient des réglages fictifs. Le journal indique à chaque redémarrage si ces réglages ont survécu. Au premier redémarrage après un flash, le firmware simulé déclenche un rollback (pire cas). Seuls le port série et esptool sont simulés : l'image est la vraie release, téléchargée et vérifiée.
 
 ```powershell
 python tools\simulate_device.py --auto
@@ -129,7 +134,7 @@ python tools\simulate_device.py --auto
 | Option | Effet |
 |---|---|
 | `--auto` | Enchaîne seul Versions → Flasher → Versions. Sans cette option, l'interface se pilote à la main. |
-| `--sans-correctif` | Désactive la neutralisation d'`app1` et la réécriture de l'otadata, pour reproduire l'ancien comportement. |
+| `--sans-correctif` | Désactive la neutralisation d'`app1`, la réécriture de l'otadata et la conservation de la NVS, pour reproduire l'ancien comportement. |
 | `--sans-rollback` | Le firmware simulé ne déclenche pas de rollback. |
 | `--captures DOSSIER` | Avec `--auto`, écrit les captures d'écran du guide (port COM5, échelle 1,3) et ajoute un cas d'erreur. |
 
@@ -148,7 +153,7 @@ La capture `update.png` (bannière de mise à jour) n'est pas produite par le si
 | Fichier | Rôle |
 |---|---|
 | `wanit_flasher/app.py` | Interface (CustomTkinter) |
-| `wanit_flasher/flasher.py` | Validation des images, flash via l'API esptool, neutralisation d'`app1`, otadata et vérification |
+| `wanit_flasher/flasher.py` | Validation des images, flash via l'API esptool (NVS conservée), neutralisation d'`app1`, otadata et vérification |
 | `wanit_flasher/partitions.py` | Lecture de la table de partitions, de l'otadata et de la version de chaque emplacement |
 | `wanit_flasher/github.py` | Releases GitHub, téléchargement vérifié, cache |
 | `wanit_flasher/updater.py` | Auto-mise à jour de l'exécutable |

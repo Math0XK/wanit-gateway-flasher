@@ -219,6 +219,39 @@ def _log_report(report: partitions.DeviceReport, on_log: LogFn) -> None:
         on_log(f"  {line}")
 
 
+def _write_plan(image: Path, erase_all: bool, on_log: LogFn) -> list[tuple[int, bytes]]:
+    """Découpe l'image en blocs à écrire, en sautant les partitions NVS qu'elle laisse vides.
+
+    L'image complète contient des 0xFF sur toute la NVS : l'écrire telle quelle effaçait le
+    Wi-Fi, l'UID, le nom et le token de l'appareil. Une NVS vide dans l'image est donc sautée
+    et celle de l'appareil conservée. Une NVS non vide dans l'image est écrite (réglages
+    voulus par qui a construit l'image). Avec l'effacement complet, tout est écrit.
+    """
+    data = image.read_bytes()
+    if erase_all:
+        return [(FLASH_ADDRESS, data)]
+    skipped: list[tuple[int, int]] = []
+    for part in partitions.parse_table(data[PARTITION_TABLE_OFFSET:PARTITION_TABLE_OFFSET + partitions.PARTITION_TABLE_SIZE]):
+        start, end = part.offset, min(part.offset + part.size, len(data))
+        if not part.is_nvs or start >= len(data):
+            continue
+        if start % SECTOR_SIZE or (end < len(data) and end % SECTOR_SIZE):
+            continue  # esptool efface par secteurs entiers : un bord non aligné toucherait la NVS
+        if data[start:end].count(0xFF) != end - start:
+            on_log(f"NVS {part.label} @0x{start:X} : l'image fournit un contenu, il remplace celui de l'appareil.")
+            continue
+        skipped.append((start, end))
+        on_log(f"NVS {part.label} @0x{start:X} conservée (Wi-Fi, UID, nom, token).")
+    plan, pos = [], 0
+    for start, end in sorted(skipped):
+        if start > pos:
+            plan.append((pos, data[pos:start]))
+        pos = end
+    if pos < len(data):
+        plan.append((pos, data[pos:]))
+    return plan
+
+
 def _neutralize_stale_slots(esp, image: Path, on_log: LogFn) -> None:
     """Empêche tout ancien firmware resté hors de l'image de redémarrer.
 
@@ -268,7 +301,7 @@ def flash(port: str, image: Path, baud: int, erase_all: bool, on_log: LogFn, on_
         with esp:
             if erase_all:
                 on_progress("erase", 0, 1)
-            write_flash(stub, [(FLASH_ADDRESS, str(image))], erase_all=erase_all, compress=True)
+            write_flash(stub, _write_plan(image, erase_all, on_log), erase_all=erase_all, compress=True)
             on_progress("verify", 0, 1)
             _neutralize_stale_slots(stub, image, on_log)
             _select_boot_slot(stub, written, on_log)

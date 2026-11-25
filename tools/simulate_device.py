@@ -8,7 +8,7 @@ réécrit l'otadata vers l'autre slot, ce qui est le pire cas pour le flasher.
 Usage :
     python tools/simulate_device.py                 # interface, à piloter à la main
     python tools/simulate_device.py --auto          # enchaîne Versions → Flasher → Versions
-    python tools/simulate_device.py --sans-correctif  # ancien comportement (app1 et otadata laissés tels quels), pour comparer
+    python tools/simulate_device.py --sans-correctif  # ancien comportement (app1, otadata et NVS), pour comparer
     python tools/simulate_device.py --auto --captures docs/guide/img   # écrit aussi les captures
 """
 
@@ -32,6 +32,7 @@ PORT = ports.Port("COM99", "Module de flash (simulé)", "bridge")
 MAC = "40:4c:ca:00:be:ef"
 FLASH_SIZE = 0x400000
 OLD_VERSION = b"v2.0.0"
+NVS_MARK = b"WIFI=Atelier;UID=GW-0042;TOKEN=simule"  # remplace les réglages d'un appareil provisionné
 
 
 def otadata_entry(seq: int) -> bytes:
@@ -62,6 +63,13 @@ class SimulatedEsp:
         otadata = next(p for p in table if p.is_otadata)
         self.flash[otadata.offset:otadata.offset + otadata.size] = b"\xff" * otadata.size
         self.flash[otadata.offset:otadata.offset + 32] = otadata_entry(2)  # (2 - 1) % 2 = app1
+        nvs = next(p for p in table if p.is_nvs)
+        self.nvs = (nvs.offset, nvs.size)
+        self.flash[nvs.offset:nvs.offset + len(NVS_MARK)] = NVS_MARK  # appareil provisionné
+
+    def nvs_kept(self) -> bool:
+        offset, _ = self.nvs
+        return bytes(self.flash[offset:offset + len(NVS_MARK)]) == NVS_MARK
 
     # Connexion ---------------------------------------------------------------------
     def __enter__(self):
@@ -85,19 +93,18 @@ class SimulatedEsp:
         time.sleep(0.05 + size / 400_000)
         self.flash[offset:offset + size] = b"\xff" * size
 
-    def write(self, image: bytes, erase_all: bool) -> None:
+    def write(self, address: int, image: bytes) -> None:
         log = flasher.log
-        if erase_all:
-            log.print("Erasing flash (this may take a while)...")
-            time.sleep(2)
-            self.flash[:] = b"\xff" * FLASH_SIZE
-        log.print(f"Flash will be erased from 0x00000000 to 0x{len(image) - 1 | 0xFFF:08x}...")
+        end = address + len(image) - 1 | 0xFFF
+        log.print(f"Flash will be erased from 0x{address:08x} to 0x{end:08x}...")
         log.print(f"Compressed {len(image)} bytes to {len(image) * 6 // 10}...")
-        steps = 40
+        steps = max(1, min(40, len(image) // 40_000))
         for i in range(steps + 1):
             log.progress_bar(i, steps)
             time.sleep(0.08)
-        self.flash[:len(image)] = image
+        # esptool efface les secteurs entiers touchés, puis écrit
+        self.flash[address:end + 1] = b"\xff" * (end + 1 - address)
+        self.flash[address:address + len(image)] = image
         self.just_flashed = True
         log.print(f"Wrote {len(image)} bytes at 0x00000000 in 3.4 seconds.")
         log.print("Hash of data verified.")
@@ -107,6 +114,7 @@ class SimulatedEsp:
         report = partitions.inspect(lambda o, n: bytes(self.flash[o:o + n]))
         boot = report.boot
         flasher.log.print(f"[simulation] démarrage sur {boot.partition.label} ({boot.app.label})" if boot else "[simulation] aucun firmware")
+        flasher.log.print("[simulation] NVS : réglages présents" if self.nvs_kept() else "[simulation] NVS : réglages PERDUS")
         first_boot, self.just_flashed = self.just_flashed, False
         if not (self.rollback and first_boot and boot):
             return
@@ -146,17 +154,19 @@ def install(device: SimulatedEsp, fix: bool, port: ports.Port) -> None:
 
     flasher._open = fake_open
     def fake_write_flash(esp, addr_data, erase_all=False, **_):
+        if erase_all:
+            flasher.log.print("Erasing flash (this may take a while)...")
+            time.sleep(2)
+            esp.flash[:] = b"\xff" * FLASH_SIZE
         for address, data in addr_data:
-            if address == 0:
-                esp.write(Path(data).read_bytes(), erase_all)
-            else:  # données brutes (otadata) : pas de barre de progression
-                esp.flash[address:address + len(data)] = data
+            esp.write(address, Path(data).read_bytes() if isinstance(data, (str, Path)) else bytes(data))
 
     flasher.write_flash = fake_write_flash
     flasher.reset_chip = lambda esp, mode: esp.reset()
     if not fix:
         flasher._neutralize_stale_slots = lambda *a, **k: None
         flasher._select_boot_slot = lambda *a, **k: None
+        flasher._write_plan = lambda image, erase_all, on_log: [(0, image.read_bytes())]
     app.ports.scan = lambda: [port]
 
 
@@ -222,7 +232,7 @@ def autopilot(window: app.App, device: SimulatedEsp, captures: Path | None) -> N
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--auto", action="store_true", help="enchaîne seul Versions → Flasher → Versions")
-    parser.add_argument("--sans-correctif", action="store_true", help="désactive la neutralisation d'app1 et la réécriture de l'otadata")
+    parser.add_argument("--sans-correctif", action="store_true", help="désactive la neutralisation d'app1, la réécriture de l'otadata et la conservation de la NVS")
     parser.add_argument("--sans-rollback", action="store_true", help="le firmware ne déclenche pas de rollback au démarrage")
     parser.add_argument("--captures", type=Path, help="dossier où écrire les captures (avec --auto)")
     args = parser.parse_args()

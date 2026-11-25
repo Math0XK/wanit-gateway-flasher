@@ -24,6 +24,7 @@ SUBTYPE_FACTORY = 0x00
 SUBTYPE_OTA_MIN = 0x10
 SUBTYPE_OTA_MAX = 0x1F
 SUBTYPE_OTADATA = 0x00
+SUBTYPE_NVS = 0x02
 
 IMAGE_MAGIC = 0xE9
 APP_DESC_OFFSET = 0x20  # en-tête image (24 o) + en-tête du premier segment (8 o)
@@ -67,6 +68,10 @@ class Partition:
     @property
     def is_otadata(self) -> bool:
         return self.type == TYPE_DATA and self.subtype == SUBTYPE_OTADATA
+
+    @property
+    def is_nvs(self) -> bool:
+        return self.type == TYPE_DATA and self.subtype == SUBTYPE_NVS
 
 
 def parse_table(data: bytes) -> list[Partition]:
