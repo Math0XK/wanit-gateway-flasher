@@ -93,6 +93,12 @@ Pour un retour en arrière, activez **Version legacy (retour en arrière)** dans
 - Les versions déjà flashées une fois restent en cache (`%LOCALAPPDATA%\WanitGatewayFlasher`) et sont proposées hors ligne.
 - Sans cache, l'onglet **Fichier local** permet de flasher un `.bin` récupéré par ailleurs.
 
+### Limite de requêtes GitHub
+
+Sans authentification, l'API GitHub accepte 60 requêtes par heure et par adresse IP publique. Tous les PC qui sortent par la même box, le même proxy ou le même VPN se partagent ce quota. Quand il est épuisé, l'utilitaire affiche « Limite de requêtes GitHub atteinte… (réessayez après HH:MM) » et inscrit l'erreur dans le journal. La dernière liste de versions connue reste proposée, avec la mention « liste en cache (limite GitHub) », car les fichiers se téléchargent hors de l'API et restent accessibles.
+
+Pour économiser ce quota, les appels à l'API sont conditionnels (ETag) : tant que rien n'a changé, GitHub répond 304, ce qui ne compte pas dans la limite.
+
 ### Mises à jour de l'utilitaire
 
 Au démarrage, l'utilitaire vérifie s'il existe une version plus récente. Une bannière propose alors de se mettre à jour : un clic télécharge la nouvelle version, vérifie son empreinte, remplace l'exécutable et le relance. Rien ne se fait sans votre accord, et jamais pendant un flash.
