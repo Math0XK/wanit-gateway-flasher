@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -25,9 +26,35 @@ ProgressFn = Callable[[int, int], None]
 
 
 class GitHubError(Exception):
-    def __init__(self, message: str, status: int | None = None):
+    def __init__(self, message: str, status: int | None = None, reset: float | None = None):
         super().__init__(message)
         self.status = status
+        self.reset = reset  # heure (epoch) de recharge du quota si la limite de l'API est atteinte
+
+    @property
+    def rate_limited(self) -> bool:
+        return self.reset is not None
+
+
+def _rate_limit_reset(exc: urllib.error.HTTPError) -> float | None:
+    """Heure de recharge du quota si `exc` est un refus pour limite de l'API, sinon None.
+
+    Sans authentification, GitHub accorde 60 requêtes par heure et par adresse IP publique :
+    tous les PC derrière une même box ou un même proxy partagent ce quota.
+    """
+    if exc.code not in (403, 429) or exc.headers is None:
+        return None
+    retry_after = exc.headers.get("Retry-After")
+    if retry_after and retry_after.isdigit():
+        return time.time() + int(retry_after)
+    if exc.headers.get("X-RateLimit-Remaining") == "0":
+        reset = exc.headers.get("X-RateLimit-Reset", "")
+        return float(reset) if reset.isdigit() else time.time() + 3600
+    return None
+
+
+def rate_limit_message(reset: float) -> str:
+    return f"Limite de requêtes GitHub atteinte pour cette connexion (réessayez après {time.strftime('%H:%M', time.localtime(reset))})"
 
 
 @dataclass
@@ -98,12 +125,44 @@ def _request(url: str, accept: str = "application/vnd.github+json") -> urllib.re
     )
 
 
-def get_json(path: str):
+def _etag_cache() -> Path:
+    return cache_dir() / "api-etags.json"
+
+
+def _load_etags() -> dict:
     try:
-        with _open(_request(f"{API}{path}")) as resp:
-            return json.load(resp)
-    except Exception as exc:  # réseau, HTTP, JSON : tout est traité comme « hors ligne »
+        data = json.loads(_etag_cache().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def get_json(path: str):
+    """GET sur l'API. Les requêtes sont conditionnelles (ETag) : une réponse 304 ne consomme pas de quota."""
+    etags = _load_etags()
+    cached = etags.get(path)
+    request = _request(f"{API}{path}")
+    if isinstance(cached, dict) and cached.get("etag"):
+        request.add_header("If-None-Match", cached["etag"])
+    try:
+        with _open(request) as resp:
+            body = json.load(resp)
+            etag = resp.headers.get("ETag")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 304 and isinstance(cached, dict) and "body" in cached:
+            return cached["body"]
+        reset = _rate_limit_reset(exc)
+        message = rate_limit_message(reset) if reset is not None else str(exc)
+        raise GitHubError(message, exc.code, reset) from exc
+    except Exception as exc:  # réseau, JSON : traité comme « hors ligne »
         raise GitHubError(str(exc), getattr(exc, "code", None)) from exc
+    if etag:
+        etags[path] = {"etag": etag, "body": body}
+        try:
+            _etag_cache().write_text(json.dumps(etags), encoding="utf-8")
+        except OSError:
+            pass
+    return body
 
 
 def list_releases(repo: str) -> list[dict]:
@@ -219,19 +278,19 @@ def _releases_cache(repo: str) -> Path:
     return cache_dir() / f"releases-{repo.replace('/', '_')}.json"
 
 
-def firmware_releases(repo: str) -> tuple[list[Release], bool]:
-    """Releases du firmware, et True si elles viennent du cache faute de réseau."""
+def firmware_releases(repo: str) -> tuple[list[Release], GitHubError | None]:
+    """Releases du firmware, et l'erreur rencontrée si elles viennent du cache faute d'accès à l'API."""
     cache = _releases_cache(repo)
     try:
         raw = list_releases(repo)
         cache.write_text(json.dumps(raw), encoding="utf-8")
-        offline = False
-    except GitHubError:
+        error = None
+    except GitHubError as exc:
         if not cache.exists():
             raise
         raw = json.loads(cache.read_text(encoding="utf-8"))
-        offline = True
-    return [Release.from_api(r) for r in raw], offline
+        error = exc
+    return [Release.from_api(r) for r in raw], error
 
 
 _FORBIDDEN = set('/:*?"<>|' + chr(92))  # chr(92) : barre oblique inverse

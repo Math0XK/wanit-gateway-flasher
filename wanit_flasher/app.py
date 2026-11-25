@@ -41,7 +41,7 @@ class App(ctk.CTk):
         self.updating = False
         self.ports: list[ports.Port] = []
         self.releases: list[github.Release] = []
-        self.releases_state = "loading"  # loading, online, offline, error
+        self.releases_state = "loading"  # loading, online, offline, limited, error
         self.local_path: Path | None = None
         self.local_check: flasher.ImageCheck | None = None
         self.pending_update: updater.Update | None = None
@@ -365,9 +365,10 @@ class App(ctk.CTk):
 
     def _load_releases(self) -> None:
         try:
-            releases, offline = github.firmware_releases(FIRMWARE_REPO)
-        except github.GitHubError:
-            self.post(self._on_releases_loaded, [], "error")
+            releases, error = github.firmware_releases(FIRMWARE_REPO)
+        except github.GitHubError as exc:
+            self.post(self.append_log, f"Liste des versions firmware : {exc}")
+            self.post(self._on_releases_loaded, [], "limited" if exc.rate_limited else "error", exc)
             return
         usable = [
             r for r in releases
@@ -375,11 +376,17 @@ class App(ctk.CTk):
             and "release-manifest.json" in r.assets
             and "release-manifest.sig" in r.assets
         ]
-        if offline:
+        if error is None:
+            state = "online"
+        else:
+            self.post(self.append_log, f"Liste des versions firmware (cache utilisé) : {error}")
+            # La limite ne vise que l'API : les téléchargements restent possibles, inutile de filtrer
+            state = "limited" if error.rate_limited else "offline"
+        if state == "offline":
             usable = [r for r in usable if github.is_cached(r, r.assets[FULL_ASSET])]
-        self.post(self._on_releases_loaded, usable, "offline" if offline else "online")
+        self.post(self._on_releases_loaded, usable, state, error)
 
-    def _on_releases_loaded(self, releases: list[github.Release], state: str) -> None:
+    def _on_releases_loaded(self, releases: list[github.Release], state: str, error: github.GitHubError | None = None) -> None:
         self.releases = releases
         self.releases_state = state
         if not releases:
@@ -387,7 +394,10 @@ class App(ctk.CTk):
             self.release_menu.configure(values=[text], state="disabled")
             self.release_menu.set(text)
             if state != "online":
-                message = "GitHub est injoignable et aucune version n'est en cache. Choisissez un fichier local ou activez la version legacy (options avancées)."
+                if error is not None and error.rate_limited:
+                    message = f"{error}. Choisissez un fichier local ou activez la version legacy (options avancées)."
+                else:
+                    message = "GitHub est injoignable et aucune version n'est en cache. Choisissez un fichier local ou activez la version legacy (options avancées)."
                 self.release_info.configure(text=message, text_color=t.WARNING)
                 if self.local_path is None:
                     self.local_info.configure(text=message, text_color=t.WARNING)
@@ -455,7 +465,7 @@ class App(ctk.CTk):
         elif release and asset:
             size = f"{asset.size / 1_000_000:.1f} Mo".replace(".", ",")
             extra = " · en cache" if github.is_cached(release, asset) else ""
-            offline = " · hors ligne" if self.releases_state == "offline" else ""
+            offline = {"offline": " · hors ligne", "limited": " · liste en cache (limite GitHub)"}.get(self.releases_state, "")
             self.release_info.configure(text=f"{'Debug' if self.debug_switch.get() else 'Standard'} · {size}{extra}{offline}", text_color=t.TEXT_HINT)
             self.notes_link.pack(side="left", padx=(8, 0))
         elif release and self.debug_switch.get():
@@ -783,8 +793,10 @@ class App(ctk.CTk):
             pass
         try:
             update = updater.check()
-        except github.GitHubError:
-            self.post(lambda: self.version_label.configure(text=f"Gateway Flasher · v{__version__} · hors ligne"))
+        except github.GitHubError as exc:
+            status = "limite GitHub atteinte" if exc.rate_limited else "hors ligne"
+            self.post(self.append_log, f"Vérification de mise à jour : {exc}")
+            self.post(lambda: self.version_label.configure(text=f"Gateway Flasher · v{__version__} · {status}"))
             return
         if update:
             self.post(self._show_update, update)
