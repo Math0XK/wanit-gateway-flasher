@@ -169,8 +169,14 @@ class App(ctk.CTk):
         self.port_menu = self._option_menu(row, lambda _: self._on_port_selected(), values=["Aucun appareil détecté"])
         self.port_menu.pack(side="left", fill="x", expand=True)
         self._secondary_button(row, "↻", self._poll_ports_now, width=36).pack(side="left", padx=(6, 0))
+        self.versions_button = self._secondary_button(row, "Versions", self._start_read_versions, width=84)
+        self.versions_button.pack(side="left", padx=(6, 0))
         self.port_status = ctk.CTkLabel(section, text="", font=font(12), height=20, anchor="w")
         self.port_status.pack(fill="x", pady=(4, 0))
+        self.versions_label = ctk.CTkLabel(
+            section, text="", font=ctk.CTkFont(family=t.MONO, size=11), text_color=t.TEXT, anchor="w", justify="left",
+            fg_color=t.FIELD, corner_radius=t.RADIUS, wraplength=WIDTH - 60,
+        )
 
     def _build_firmware_section(self) -> None:
         section = ctk.CTkFrame(self.body, fg_color="transparent")
@@ -342,6 +348,8 @@ class App(ctk.CTk):
 
     def _on_port_selected(self) -> None:
         port = self.selected_port()
+        if port is None or port.device != getattr(self, "versions_port", None):
+            self._show_versions(None, None)
         if port is None:
             self.port_status.configure(text="Branchez le module de flash sur la carte et sur un port USB.", text_color=t.TEXT_HINT)
         elif port.kind == "espressif":
@@ -557,11 +565,13 @@ class App(ctk.CTk):
         return None
 
     def _refresh_action(self) -> None:
+        port = self.selected_port()
+        self.versions_button.configure(state="normal" if port and not (self.busy or self.updating) else "disabled")
         if self.busy or self.updating:
-            text = "Flash en cours…" if self.busy else "Mise à jour de l'utilitaire…"
+            text = {"flash": "Flash en cours…", "read": "Lecture des versions…"}.get(self.busy, "Mise à jour de l'utilitaire…")
             self.flash_button.configure(text=text, state="disabled", fg_color=t.BLUE)
             return
-        port, target = self.selected_port(), self._target_name()
+        target = self._target_name()
         if port is None:
             text = "Branchez un appareil"
         elif target is None:
@@ -582,7 +592,8 @@ class App(ctk.CTk):
         else:
             self.error_box.pack_forget()
 
-    def _set_busy(self, busy: bool) -> None:
+    def _set_busy(self, busy: str | bool) -> None:
+        """`busy` vaut "flash", "read" ou False."""
         self.after_idle(self._fit)
         self.busy = busy
         state = "disabled" if busy else "normal"
@@ -620,7 +631,8 @@ class App(ctk.CTk):
         self.log_box.configure(state="normal")
         self.log_box.delete("1.0", "end")
         self.log_box.configure(state="disabled")
-        self._set_busy(True)
+        self._show_versions(None, None)
+        self._set_busy("flash")
         job = dict(
             port=port.device,
             target=target,
@@ -657,7 +669,7 @@ class App(ctk.CTk):
             if not check.ok:
                 raise flasher.FlashError(check.message)
             log(f"Port {job['port']} · {job['baud']} bauds" + (" · effacement complet" if job["erase"] else ""))
-            mac = flasher.flash(
+            result = flasher.flash(
                 job["port"], image, job["baud"], job["erase"], log, lambda stage, done, total: self.post(self._on_progress, stage, done, total)
             )
         except (flasher.FlashError, github.GitHubError) as exc:
@@ -667,7 +679,49 @@ class App(ctk.CTk):
             log(f"Erreur : {type(exc).__name__}: {exc}")
             self.post(self._on_flash_failed, f"Erreur inattendue : {exc}")
             return
-        self.post(self._on_flash_done, job, mac)
+        self.post(self._on_flash_done, job, result)
+
+    # --- Lecture des versions installées -------------------------------------------
+
+    def _start_read_versions(self) -> None:
+        port = self.selected_port()
+        if self.busy or self.updating or port is None:
+            return
+        self._show_error(None)
+        self._show_versions(None, None)
+        self._set_busy("read")
+        self._run(self._read_versions_worker, port.device, int(self.baud_menu.get()))
+
+    def _read_versions_worker(self, port: str, baud: int) -> None:
+        log = lambda line: self.post(self.append_log, line)  # noqa: E731
+        log(f"Lecture des versions sur {port} · {baud} bauds")
+        try:
+            result = flasher.read_versions(port, baud, log, lambda stage, done, total: self.post(self._on_progress, stage, done, total))
+        except flasher.FlashError as exc:
+            self.post(self._on_flash_failed, str(exc))
+            return
+        except Exception as exc:  # garde-fou
+            log(f"Erreur : {type(exc).__name__}: {exc}")
+            self.post(self._on_flash_failed, f"Erreur inattendue : {exc}")
+            return
+        self.post(self._on_versions_read, port, result)
+
+    def _on_versions_read(self, port: str, result: flasher.FlashResult) -> None:
+        self._set_busy(False)
+        self._show_versions(port, result.report)
+
+    def _show_versions(self, port: str | None, report) -> None:
+        self.versions_port = port
+        if report is None:
+            if self.versions_label.winfo_manager():
+                self.versions_label.pack_forget()
+                self.after_idle(self._fit)
+            return
+        boot = report.boot
+        head = f"En service : {boot.app.label} ({boot.partition.label})" if boot else "Aucun firmware ne démarrera."
+        self.versions_label.configure(text="\n".join([head, *report.lines()]), text_color=t.TEXT if boot else t.DANGER)
+        self.versions_label.pack(fill="x", pady=(4, 0), ipadx=8, ipady=6)
+        self.after_idle(self._fit)
 
     def _on_progress(self, stage: str, done: int, total: int) -> None:
         labels = {
@@ -675,10 +729,12 @@ class App(ctk.CTk):
             "connect": f"Connexion à l'{TARGET_CHIP}…",
             "erase": "Effacement de la flash…",
             "write": "Écriture…",
+            "verify": "Vérification du firmware qui démarrera…",
+            "read": "Lecture des versions installées…",
             "reset": "Redémarrage de l'appareil…",
         }
         self.progress_label.configure(text=labels.get(stage, ""))
-        if stage in ("connect", "erase"):
+        if stage in ("connect", "erase", "verify", "read"):
             if self.progress.cget("mode") != "indeterminate":
                 self.progress.configure(mode="indeterminate")
                 self.progress.start()
@@ -697,13 +753,17 @@ class App(ctk.CTk):
         self._toggle_log(True)
         self._on_release_selected()
 
-    def _on_flash_done(self, job: dict, mac: str) -> None:
+    def _on_flash_done(self, job: dict, result: flasher.FlashResult) -> None:
         self._set_busy(False)
         if job["legacy"]:
             after = f"L'appareil redémarre en Bluetooth uniquement, sous le nom « {legacy.BLE_NAME} »."
         else:
             after = "L'appareil redémarre. S'il n'est pas encore provisionné, il apparaît en BLE sous le nom « Wanit SC »."
-        self.success_label.configure(text=f"{job['target']} est installé sur {job['port']} (MAC {mac}).\n\n{after}")
+        boot = result.report.boot
+        running = f"Version active lue sur l'appareil : {boot.app.label} ({boot.partition.label})." if boot else ""
+        self.success_label.configure(
+            text=f"{job['target']} est installé sur {job['port']} (MAC {result.mac}).\n{running}\n\n{after}"
+        )
         self.body.pack_forget()
         self.success.pack(fill="both", expand=True)
         self._on_release_selected()  # « en cache » est maintenant vrai
@@ -771,7 +831,7 @@ class App(ctk.CTk):
         self._refresh_action()
 
     def _on_close(self) -> None:
-        if self.busy and not messagebox.askyesno(
+        if self.busy == "flash" and not messagebox.askyesno(
             APP_NAME, "Un flash est en cours. Quitter maintenant peut laisser l'appareil sans firmware valide.\n\nQuitter quand même ?",
             icon="warning",
         ):

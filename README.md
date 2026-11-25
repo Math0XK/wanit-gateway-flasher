@@ -18,7 +18,7 @@ Ce lien pointe toujours vers la dernière version. Guide d'installation imprimab
 3. La dernière version du firmware est proposée par défaut. Vous pouvez choisir une version plus ancienne, ou un fichier `.bin` local.
 4. Cliquez sur **Flasher**.
 
-L'appareil redémarre à la fin. S'il n'est pas encore provisionné, il apparaît en BLE sous le nom `Wanit SC`. Le Wi-Fi provisionné, l'UID, le nom et le token sont conservés, sauf si vous activez l'effacement complet.
+Après l'écriture, l'utilitaire relit la carte et confirme la version qui démarrera ; elle est rappelée sur l'écran de fin. L'appareil redémarre à la fin. S'il n'est pas encore provisionné, il apparaît en BLE sous le nom `Wanit SC`. Le Wi-Fi provisionné, l'UID, le nom et le token sont conservés, sauf si vous activez l'effacement complet.
 
 ### Avertissements de Windows : c'est normal
 
@@ -32,6 +32,28 @@ Get-FileHash .\WanitGatewayFlasher.exe
 - **Au premier lancement** (« Windows a protégé votre ordinateur ») : cliquez sur **Informations complémentaires**, vérifiez que le fichier s'appelle bien `WanitGatewayFlasher.exe`, puis **Exécuter quand même**.
 
 Ces avertissements n'apparaissent qu'une fois : ensuite, l'utilitaire se met à jour lui-même.
+
+### Vérifier la version installée (bouton « Versions »)
+
+Le bouton **Versions**, à droite du choix du port, lit la carte sans rien écrire et affiche, pour chaque emplacement de firmware, la version qu'il contient et celui qui démarre :
+
+```
+En service : v2.2.5 (app0)
+app0 @0x10000 : v2.2.5 ← démarre
+app1 @0x1F0000 : vide
+```
+
+La carte contient deux emplacements (`app0`, `app1`) : une mise à jour OTA écrit dans l'emplacement libre, puis la partition `otadata` (0xE000) désigne celui qui démarre. L'utilitaire refait le choix du bootloader ESP-IDF à partir de l'otadata et des en-têtes d'image. La version est lue dans la chaîne `fw_version` du firmware ; la version legacy est reconnue par l'empreinte de son ELF ; sinon « version inconnue » est affiché avec le début de cette empreinte.
+
+### Ce que fait un flash par câble
+
+L'image `-full.bin` est écrite en 0x0 : bootloader, table de partitions, otadata et `app0`. Elle ne couvre pas `app1`. Un firmware installé auparavant par OTA y restait donc intact et pouvait redémarrer (otadata qui le désigne, rollback, repli du bootloader) alors que l'utilitaire affichait la version qu'il venait d'écrire. Depuis la v1.0.8, après l'écriture :
+
+1. le premier secteur de chaque emplacement non couvert par l'image (`app1`) est effacé : l'ancien firmware ne peut plus démarrer ;
+2. l'otadata est réécrite pour désigner l'emplacement flashé, avec l'état `VALID`, quelle que soit l'otadata contenue dans l'image ;
+3. la carte est relue : si l'emplacement qui démarrerait n'est pas celui qui vient d'être écrit, ou n'a pas la version attendue, le flash est signalé en échec.
+
+Conséquence : après un flash par câble, aucun retour automatique vers la version OTA précédente n'est possible.
 
 ### Options avancées (roue crantée)
 
@@ -59,6 +81,7 @@ Pour un retour en arrière, activez **Version legacy (retour en arrière)** dans
 - Les releases firmware et les mises à jour de l'application doivent inclure `release-manifest.json` et `release-manifest.sig`. Elles utilisent des clés de publication dédiées, différentes des clés OTA du Gateway.
 - Un fichier local est contrôlé avant le flash : en-tête ESP, identifiant de puce, taille et table de partitions avec adresses et recouvrements vérifiés. Ces contrôles valident le format, pas l'origine ni l'innocuité du firmware ; utilisez uniquement un fichier provenant d'une source de confiance. Les images OTA (`-ota.bin`) sont refusées.
 - Le flash s'arrête avant toute écriture si la puce détectée n'est pas un ESP32-C6.
+- Après l'écriture, l'ancien emplacement OTA est neutralisé, l'otadata désigne l'emplacement flashé et la version qui démarrera est vérifiée (voir « Ce que fait un flash par câble »).
 
 ### Sans connexion Internet
 
@@ -77,17 +100,56 @@ Le message d'erreur indique quoi faire. Le cas le plus courant : le connecteur d
 
 Prérequis : Python 3.13 ou plus récent.
 
-```bash
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
+```
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+```powershell
 pip install -r requirements.txt
+```
+
+```powershell
 python -m wanit_flasher
 ```
+
+L'application se lance comme un module (`python -m wanit_flasher`), pas via `python wanit_flasher\app.py`, qui utilise des imports relatifs. Si PowerShell refuse `Activate.ps1`, appelez directement `.\.venv\Scripts\python.exe -m wanit_flasher`.
+
+### Simuler un appareil sans matériel
+
+`tools/simulate_device.py` lance la vraie interface avec un ESP32-C6 virtuel, dans l'état d'un banc mis à jour par OTA : `app0` contient la dernière release, `app1` une copie dont la version est remplacée par `v2.0.0`, et l'otadata désigne `app1`. Au premier redémarrage après un flash, le firmware simulé déclenche un rollback (pire cas). Seuls le port série et esptool sont simulés : l'image est la vraie release, téléchargée et vérifiée.
+
+```powershell
+python tools\simulate_device.py --auto
+```
+
+| Option | Effet |
+|---|---|
+| `--auto` | Enchaîne seul Versions → Flasher → Versions. Sans cette option, l'interface se pilote à la main. |
+| `--sans-correctif` | Désactive la neutralisation d'`app1` et la réécriture de l'otadata, pour reproduire l'ancien comportement. |
+| `--sans-rollback` | Le firmware simulé ne déclenche pas de rollback. |
+| `--captures DOSSIER` | Avec `--auto`, écrit les captures d'écran du guide (port COM5, échelle 1,3) et ajoute un cas d'erreur. |
+
+Pour régénérer les captures du guide, puis le PDF :
+
+```powershell
+python tools\simulate_device.py --auto --sans-rollback --captures docs\guide\img
+```
+
+```powershell
+python tools\build_guide.py
+```
+
+La capture `update.png` (bannière de mise à jour) n'est pas produite par le simulateur.
 
 | Fichier | Rôle |
 |---|---|
 | `wanit_flasher/app.py` | Interface (CustomTkinter) |
-| `wanit_flasher/flasher.py` | Validation des images et flash via l'API esptool |
+| `wanit_flasher/flasher.py` | Validation des images, flash via l'API esptool, neutralisation d'`app1`, otadata et vérification |
+| `wanit_flasher/partitions.py` | Lecture de la table de partitions, de l'otadata et de la version de chaque emplacement |
 | `wanit_flasher/github.py` | Releases GitHub, téléchargement vérifié, cache |
 | `wanit_flasher/updater.py` | Auto-mise à jour de l'exécutable |
 | `wanit_flasher/ports.py` | Détection des ports série |
@@ -95,6 +157,7 @@ python -m wanit_flasher
 | `tools/make_assets.py` | Génère icône et logos depuis `assets/brand/wanit-logo.jpg` |
 | `tools/build.py` | Construit `dist/WanitGatewayFlasher.exe` |
 | `tools/build_guide.py` | Génère le guide PDF depuis `docs/guide/guide.html` |
+| `tools/simulate_device.py` | Interface avec un ESP32-C6 simulé, et captures du guide |
 
 ### Construire l'exécutable
 

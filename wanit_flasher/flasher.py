@@ -14,9 +14,10 @@ from esptool.cmds import attach_flash, detect_chip, reset_chip, run_stub, write_
 from esptool.logger import TemplateLogger, log
 from esptool.util import FatalError
 
-from . import TARGET_CHIP
+from . import TARGET_CHIP, partitions
 
 FLASH_ADDRESS = 0x0
+SECTOR_SIZE = 0x1000
 ROM_BAUD = 115200
 IMAGE_MAGIC = 0xE9
 PARTITION_TABLE_OFFSET = 0x8000
@@ -189,27 +190,101 @@ log.set_logger(GuiLogger())
 
 # --- Flash -----------------------------------------------------------------------------
 
-def flash(port: str, image: Path, baud: int, erase_all: bool, on_log: LogFn, on_progress: ProgressFn) -> str:
-    """Flashe `image` en 0x0 sur l'ESP32-C6 de `port`. Renvoie l'adresse MAC de l'appareil."""
+@dataclass
+class FlashResult:
+    mac: str
+    report: partitions.DeviceReport
+
+
+def _open(port: str, baud: int, on_log: LogFn):
+    """Connecte l'ESP32-C6, charge le stub et attache la flash. À utiliser dans un `with`."""
+    esp = detect_chip(port, ROM_BAUD)
+    try:
+        if esp.CHIP_NAME != TARGET_CHIP:
+            raise FlashError(f"L'appareil sur {port} est un {esp.CHIP_NAME}, pas un {TARGET_CHIP}. Rien n'a été écrit.")
+        mac = ":".join(f"{b:02x}" for b in esp.read_mac())
+        on_log(f"Appareil : {esp.get_chip_description()} · MAC {mac}")
+        stub = run_stub(esp)
+        if baud != ROM_BAUD:
+            stub.change_baud(baud)
+        attach_flash(stub)
+        return esp, stub, mac
+    except BaseException:
+        esp._port.close()
+        raise
+
+
+def _log_report(report: partitions.DeviceReport, on_log: LogFn) -> None:
+    for line in report.lines():
+        on_log(f"  {line}")
+
+
+def _neutralize_stale_slots(esp, image: Path, on_log: LogFn) -> None:
+    """Empêche tout ancien firmware resté hors de l'image de redémarrer.
+
+    L'image complète réécrit bootloader, table, otadata et app0, mais pas app1 : un firmware
+    installé auparavant par OTA y reste intact. Si l'otadata le désigne encore, ou si le
+    firmware neuf déclenche un rollback, l'appareil repart sur cette ancienne version.
+    On efface donc le premier secteur de chaque slot applicatif non réécrit, ce qui le rend
+    non amorçable.
+    """
+    image_end = image.stat().st_size
+    for part in partitions.read_table(esp.read_flash):
+        if part.is_app and part.offset >= image_end:
+            app = partitions.read_app(esp.read_flash, part.offset, part.size)
+            if app.present:
+                esp.erase_region(part.offset, SECTOR_SIZE)
+                on_log(f"Slot {part.label} @0x{part.offset:X} : ancien firmware {app.label} neutralisé.")
+
+
+def _select_boot_slot(esp, written: partitions.Partition, on_log: LogFn) -> None:
+    """Réécrit l'otadata pour qu'elle désigne explicitement le slot qui vient d'être flashé.
+
+    On ne se fie pas à l'otadata embarquée dans l'image : un fichier local peut ne pas en
+    contenir, ou en contenir une qui désigne un autre slot.
+    """
+    otadata = next((p for p in partitions.read_table(esp.read_flash) if p.is_otadata), None)
+    if otadata is None:
+        return
+    if written.ota_index is None:
+        # Slot factory : une otadata vide fait démarrer factory.
+        esp.erase_region(otadata.offset, otadata.size)
+        on_log(f"otadata @0x{otadata.offset:X} effacée : démarrage sur {written.label}.")
+        return
+    data = partitions.otadata_selecting(written.ota_index, otadata.size)
+    write_flash(esp, [(otadata.offset, data)], compress=True, no_progress=True)
+    on_log(f"otadata @0x{otadata.offset:X} : démarrage fixé sur {written.label} (état VALID).")
+
+
+def flash(port: str, image: Path, baud: int, erase_all: bool, on_log: LogFn, on_progress: ProgressFn) -> FlashResult:
+    """Flashe `image` en 0x0 sur l'ESP32-C6 de `port`, puis vérifie quel firmware démarrera."""
     GuiLogger.log_sink = on_log
     GuiLogger.progress_sink = on_progress
     try:
+        written = _image_app_slot(image)
+        expected = partitions.read_app(partitions.file_reader(image), written.offset, written.size)
         on_progress("connect", 0, 1)
-        with detect_chip(port, ROM_BAUD) as esp:
-            if esp.CHIP_NAME != TARGET_CHIP:
-                raise FlashError(f"L'appareil sur {port} est un {esp.CHIP_NAME}, pas un {TARGET_CHIP}. Rien n'a été écrit.")
-            mac = ":".join(f"{b:02x}" for b in esp.read_mac())
-            on_log(f"Appareil : {esp.get_chip_description()} · MAC {mac}")
-            esp = run_stub(esp)
-            if baud != ROM_BAUD:
-                esp.change_baud(baud)
-            attach_flash(esp)
+        esp, stub, mac = _open(port, baud, on_log)
+        with esp:
             if erase_all:
                 on_progress("erase", 0, 1)
-            write_flash(esp, [(FLASH_ADDRESS, str(image))], erase_all=erase_all, compress=True)
+            write_flash(stub, [(FLASH_ADDRESS, str(image))], erase_all=erase_all, compress=True)
+            on_progress("verify", 0, 1)
+            _neutralize_stale_slots(stub, image, on_log)
+            _select_boot_slot(stub, written, on_log)
+            report = partitions.inspect(stub.read_flash)
+            on_log("Firmware installé par slot :")
+            _log_report(report, on_log)
+            boot = report.boot
+            if boot is None or boot.partition.offset != written.offset or not boot.selected or boot.app.label != expected.label:
+                running = f"{boot.app.label} ({boot.partition.label})" if boot else "aucun firmware"
+                raise FlashError(
+                    f"L'écriture a réussi mais l'appareil démarrerait sur « {running} » au lieu de "
+                    f"« {expected.label} ({written.label}) ». Relancez le flash avec « Effacer toute la flash avant d'écrire »."
+                )
             on_progress("reset", 1, 1)
-            reset_chip(esp, "hard-reset")
-            return mac
+            reset_chip(stub, "hard-reset")
+            return FlashResult(mac, report)
     except FlashError:
         raise
     except Exception as exc:
@@ -218,6 +293,39 @@ def flash(port: str, image: Path, baud: int, erase_all: bool, on_log: LogFn, on_
     finally:
         GuiLogger.log_sink = None
         GuiLogger.progress_sink = None
+
+
+def read_versions(port: str, baud: int, on_log: LogFn, on_progress: ProgressFn) -> FlashResult:
+    """Lit, sans rien écrire, la version présente dans chaque slot et celle qui démarre."""
+    GuiLogger.log_sink = on_log
+    GuiLogger.progress_sink = None  # la lecture n'a pas de barre d'écriture
+    try:
+        on_progress("connect", 0, 1)
+        esp, stub, mac = _open(port, baud, on_log)
+        with esp:
+            on_progress("read", 0, 1)
+            report = partitions.inspect(stub.read_flash)
+            on_log("Firmware installé par slot :")
+            _log_report(report, on_log)
+            reset_chip(stub, "hard-reset")
+            return FlashResult(mac, report)
+    except FlashError:
+        raise
+    except Exception as exc:
+        on_log(f"Erreur : {type(exc).__name__}: {exc}")
+        raise FlashError(explain(exc, port)) from exc
+    finally:
+        GuiLogger.log_sink = None
+
+
+def _image_app_slot(image: Path) -> partitions.Partition:
+    """Slot applicatif que l'image écrit (le premier qu'elle couvre)."""
+    read = partitions.file_reader(image)
+    size = image.stat().st_size
+    apps = [p for p in partitions.read_table(read) if p.is_app and p.offset < size]
+    if not apps:
+        raise FlashError("L'image ne contient aucun firmware applicatif.")
+    return min(apps, key=lambda p: p.offset)
 
 
 def explain(exc: Exception, port: str) -> str:

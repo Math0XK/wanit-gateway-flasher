@@ -102,7 +102,7 @@
     </div>
     <h1>Guide d'installation<br>et d'utilisation</h1>
     <p class="sub">Flasher le firmware du Wanit Gateway (ESP32-C6) depuis un PC Windows, sans installation ni ligne de commande.</p>
-    <p class="meta">Utilitaire version 1.0.2 · Octobre 2026 · Logiciel libre sous licence GPL v3</p>
+    <p class="meta">Utilitaire version 1.0.8 · Novembre 2026 · Logiciel libre sous licence GPL v3</p>
   </div>
 
   <div class="cover-body">
@@ -198,10 +198,10 @@
     </figure>
     <div>
       <ol class="steps">
-        <li><div><strong>Branchez le module de flash.</strong> Enfichez son connecteur sur le connecteur Segger du Wanit Gateway, dans le bon sens, puis branchez le module sur un port USB du PC. Il apparaît tout seul dans <em>1 · Appareil</em> et la ligne verte confirme « Module de flash détecté ». La liste se met à jour quand on branche ou débranche le module ; le bouton <kbd>↻</kbd> force un rafraîchissement.</div></li>
+        <li><div><strong>Branchez le module de flash.</strong> Enfichez son connecteur sur le connecteur Segger du Wanit Gateway, dans le bon sens, puis branchez le module sur un port USB du PC. Il apparaît tout seul dans <em>1 · Appareil</em> et la ligne verte confirme « Module de flash détecté ». La liste se met à jour quand on branche ou débranche le module ; le bouton <kbd>↻</kbd> force un rafraîchissement. Le bouton <kbd>Versions</kbd> indique ce qui est installé sur la carte, sans rien modifier (voir ci-dessous).</div></li>
         <li><div><strong>Choisissez le firmware.</strong> Par défaut, la dernière version publiée est sélectionnée : dans la plupart des cas, il n'y a rien à changer. La liste permet de revenir à une version précédente ; <em>Notes de version</em> ouvre la description de la version.</div></li>
         <li><div><strong>Cliquez sur le bouton bleu.</strong> Son libellé rappelle ce qui va se passer, par exemple « Flasher v2.1.0 sur COM5 ». Vérifiez-le avant de cliquer.</div></li>
-        <li><div><strong>Patientez</strong> sans débrancher le module : le firmware est téléchargé, vérifié, puis écrit. Comptez de 20 secondes à une minute.</div></li>
+        <li><div><strong>Patientez</strong> sans débrancher le module : le firmware est téléchargé, vérifié, écrit, puis l'utilitaire relit la carte pour confirmer la version qui démarrera. Comptez de 20 secondes à une minute.</div></li>
       </ol>
     </div>
   </div>
@@ -219,7 +219,21 @@
 
   <div class="card info avoid" style="margin-top:6mm">
     <div class="title">Après le flash</div>
-    <p style="margin:0">La carte redémarre et <strong>conserve son Wi-Fi, son UID, son nom et son token</strong>. Si elle n'a jamais été configurée, elle apparaît en Bluetooth sous le nom <strong>Wanit SC</strong>, prête à être provisionnée. Pour flasher une autre carte, cliquez sur <kbd>Flasher un autre appareil</kbd>.</p>
+    <p style="margin:0">La carte redémarre et <strong>conserve son Wi-Fi, son UID, son nom et son token</strong>. Si elle n'a jamais été configurée, elle apparaît en Bluetooth sous le nom <strong>Wanit SC</strong>, prête à être provisionnée. L'écran de fin indique la <strong>version active lue sur la carte</strong>. Pour flasher une autre carte, cliquez sur <kbd>Flasher un autre appareil</kbd>.</p>
+  </div>
+
+  <div class="figrow" style="margin-top:8mm">
+    <figure>
+      <div class="shot"><img src="img/versions.png" alt="Versions installées"></div>
+      <figcaption>Bouton « Versions » : contenu de chaque emplacement de la carte.</figcaption>
+    </figure>
+    <div class="avoid">
+      <h3 style="margin-top:0">Vérifier la version installée</h3>
+      <p>La mémoire du Wanit Gateway contient deux emplacements de firmware, <code>app0</code> et <code>app1</code> : une mise à jour à distance (OTA) écrit dans l'emplacement libre, puis bascule dessus. Une petite zone, l'<em>otadata</em>, indique lequel démarre.</p>
+      <p>Cliquez sur <kbd>Versions</kbd> pour lire, sans rien écrire, la version présente dans chaque emplacement et celle qui démarre (« ← démarre »). La carte redémarre ensuite normalement. Un emplacement « vide » ne contient aucun firmware.</p>
+      <h3>Ce que fait le flash par câble</h3>
+      <p style="margin:0">Le firmware est toujours écrit dans <code>app0</code>. L'utilitaire efface ensuite l'en-tête de <code>app1</code>, pour qu'une ancienne version installée par OTA ne puisse plus redémarrer, réécrit l'otadata pour qu'elle désigne <code>app0</code>, puis relit la carte. Si la version qui démarrerait n'est pas celle qui vient d'être écrite, le flash est signalé en échec.</p>
+    </div>
   </div>
 </section>
 
@@ -279,6 +293,8 @@
     <tr><td>« Le port COMx est occupé »</td><td>Un autre programme utilise le port : fermez le moniteur série, Arduino IDE, PuTTY, une autre instance de l'utilitaire, etc.</td></tr>
     <tr><td>« L'appareil … n'est pas un ESP32-C6 »</td><td>Le port sélectionné correspond à un autre appareil. Choisissez le port « Module de flash » dans la liste. Rien n'a été écrit.</td></tr>
     <tr><td>Échec en cours d'écriture</td><td>Ouvrez la roue crantée et baissez la vitesse de transfert (460800 puis 115200), puis relancez.</td></tr>
+    <tr><td>« L'écriture a réussi mais l'appareil démarrerait sur … »</td><td>La relecture a trouvé une autre version que celle écrite. Ouvrez la roue crantée, activez <em>Effacer toute la flash avant d'écrire</em> et relancez. Envoyez le journal au support si le message persiste.</td></tr>
+    <tr><td>La carte ne se comporte pas comme la version attendue</td><td>Cliquez sur <kbd>Versions</kbd> : la ligne « En service » indique la version réellement active. Reflashez si ce n'est pas la bonne.</td></tr>
     <tr><td>« Fichier non valide »</td><td>Le fichier local n'est pas une image complète pour ESP32-C6. Utilisez <code>esp32-ble-wifi-uart-bridge-full.bin</code>, jamais <code>…-ota.bin</code>.</td></tr>
     <tr><td>« GitHub est injoignable »</td><td>Vérifiez la connexion Internet ou le proxy de l'entreprise. En attendant, utilisez une version en mémoire ou un fichier local.</td></tr>
     <tr><td>L'antivirus bloque le fichier</td><td>Téléchargez-le uniquement depuis le lien officiel (page 1). Ajoutez-le aux exceptions de l'antivirus si votre politique le permet.</td></tr>
