@@ -33,12 +33,12 @@ Get-FileHash .\WanitGatewayFlasher.exe
 
 Ces avertissements n'apparaissent qu'une fois : ensuite, l'utilitaire se met à jour lui-même.
 
-### Vérifier la version installée (bouton « Versions »)
+### Vérifier la version installée (bouton « Lire la version installée sur l'appareil »)
 
-Le bouton **Versions**, à droite du choix du port, lit la carte sans rien écrire et affiche, pour chaque emplacement de firmware, la version qu'il contient et celui qui démarre :
+Le bouton **Lire la version installée sur l'appareil**, sous le choix du port, lit la carte sans rien écrire et affiche, pour chaque emplacement de firmware, la version qu'il contient et celui qui démarre. Il est grisé tant qu'aucun appareil n'est détecté, et devient **Relire la version installée** après une lecture :
 
 ```
-En service : v2.2.5 (app0)
+Installé sur l'appareil : v2.2.5 (app0)
 app0 @0x10000 : v2.2.5 ← démarre
 app1 @0x1F0000 : vide
 ```
@@ -139,7 +139,7 @@ python tools\simulate_device.py --auto
 
 | Option | Effet |
 |---|---|
-| `--auto` | Enchaîne seul Versions → Flasher → Versions. Sans cette option, l'interface se pilote à la main. |
+| `--auto` | Enchaîne seul Lecture de la version → Flasher → Lecture. Sans cette option, l'interface se pilote à la main. |
 | `--sans-correctif` | Désactive la neutralisation d'`app1`, la réécriture de l'otadata et la conservation de la NVS, pour reproduire l'ancien comportement. |
 | `--sans-rollback` | Le firmware simulé ne déclenche pas de rollback. |
 | `--captures DOSSIER` | Avec `--auto`, écrit les captures d'écran du guide (port COM5, échelle 1,3) et ajoute un cas d'erreur. |

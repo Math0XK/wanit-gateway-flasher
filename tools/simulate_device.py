@@ -7,7 +7,7 @@ réécrit l'otadata vers l'autre slot, ce qui est le pire cas pour le flasher.
 
 Usage :
     python tools/simulate_device.py                 # interface, à piloter à la main
-    python tools/simulate_device.py --auto          # enchaîne Versions → Flasher → Versions
+    python tools/simulate_device.py --auto          # enchaîne Lecture → Flasher → Lecture
     python tools/simulate_device.py --sans-correctif  # ancien comportement (app1, otadata et NVS), pour comparer
     python tools/simulate_device.py --auto --captures docs/guide/img   # écrit aussi les captures
 """
@@ -204,7 +204,7 @@ def autopilot(window: app.App, device: SimulatedEsp, captures: Path | None) -> N
         kind, arg = steps.pop(0)
         delay = 2500
         if kind == "versions":
-            print("→ clic sur « Versions »")
+            print("→ clic sur « Lire la version installée »")
             window._start_read_versions()
         elif kind == "flash":
             print("→ clic sur « Flasher »")
@@ -231,7 +231,7 @@ def autopilot(window: app.App, device: SimulatedEsp, captures: Path | None) -> N
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--auto", action="store_true", help="enchaîne seul Versions → Flasher → Versions")
+    parser.add_argument("--auto", action="store_true", help="enchaîne seul Lecture → Flasher → Lecture")
     parser.add_argument("--sans-correctif", action="store_true", help="désactive la neutralisation d'app1, la réécriture de l'otadata et la conservation de la NVS")
     parser.add_argument("--sans-rollback", action="store_true", help="le firmware ne déclenche pas de rollback au démarrage")
     parser.add_argument("--captures", type=Path, help="dossier où écrire les captures (avec --auto)")

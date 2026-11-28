@@ -21,6 +21,8 @@ DEBUG_ASSET = "esp32-ble-wifi-uart-bridge-full-debug.bin"
 BAUD_RATES = ["921600", "460800", "115200"]
 SOURCE_RELEASE = "Release GitHub"
 SOURCE_LOCAL = "Fichier local"
+READ_TEXT = "⟳   Lire la version installée sur l'appareil"
+READ_AGAIN_TEXT = "⟳   Relire la version installée"
 PORT_POLL_MS = 1500
 WIDTH = 500
 
@@ -169,10 +171,14 @@ class App(ctk.CTk):
         self.port_menu = self._option_menu(row, lambda _: self._on_port_selected(), values=["Aucun appareil détecté"])
         self.port_menu.pack(side="left", fill="x", expand=True)
         self._secondary_button(row, "↻", self._poll_ports_now, width=36).pack(side="left", padx=(6, 0))
-        self.versions_button = self._secondary_button(row, "Versions", self._start_read_versions, width=84)
-        self.versions_button.pack(side="left", padx=(6, 0))
         self.port_status = ctk.CTkLabel(section, text="", font=font(12), height=20, anchor="w")
         self.port_status.pack(fill="x", pady=(4, 0))
+        self.versions_button = ctk.CTkButton(
+            section, text=READ_TEXT, height=30, corner_radius=t.RADIUS, font=font(12, "bold"), fg_color=t.BLUE_TINT,
+            hover_color="#D3ECF9", text_color=t.BLUE_TEXT, text_color_disabled=t.DISABLED, anchor="w",
+            command=self._start_read_versions,
+        )
+        self.versions_button.pack(fill="x", pady=(4, 0))
         self.versions_label = ctk.CTkLabel(
             section, text="", font=ctk.CTkFont(family=t.MONO, size=11), text_color=t.TEXT, anchor="w", justify="left",
             fg_color=t.FIELD, corner_radius=t.RADIUS, wraplength=WIDTH - 60,
@@ -576,7 +582,10 @@ class App(ctk.CTk):
 
     def _refresh_action(self) -> None:
         port = self.selected_port()
-        self.versions_button.configure(state="normal" if port and not (self.busy or self.updating) else "disabled")
+        self.versions_button.configure(
+            state="normal" if port and not (self.busy or self.updating) else "disabled",
+            text="Lecture en cours…" if self.busy == "read" else READ_AGAIN_TEXT if getattr(self, "versions_port", None) else READ_TEXT,
+        )
         if self.busy or self.updating:
             text = {"flash": "Flash en cours…", "read": "Lecture des versions…"}.get(self.busy, "Mise à jour de l'utilitaire…")
             self.flash_button.configure(text=text, state="disabled", fg_color=t.BLUE)
@@ -728,10 +737,11 @@ class App(ctk.CTk):
                 self.after_idle(self._fit)
             return
         boot = report.boot
-        head = f"En service : {boot.app.label} ({boot.partition.label})" if boot else "Aucun firmware ne démarrera."
+        head = f"Installé sur l'appareil : {boot.app.label} ({boot.partition.label})" if boot else "Aucun firmware ne démarrera."
         self.versions_label.configure(text="\n".join([head, *report.lines()]), text_color=t.TEXT if boot else t.DANGER)
         self.versions_label.pack(fill="x", pady=(4, 0), ipadx=8, ipady=6)
         self.after_idle(self._fit)
+        self._refresh_action()
 
     def _on_progress(self, stage: str, done: int, total: int) -> None:
         labels = {
